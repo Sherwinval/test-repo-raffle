@@ -32,31 +32,36 @@ export function parseFileBuffer(buffer: Buffer, ext: string) {
 
       return {
         email,
-        registrationId: getField(row, [
-          'registrationId',
-          'RegistrationId',
-          'registration_id',
-          'Registration ID',
+        employeeId: getField(row, [
+          'employee id',
+          'employee_id',
+          'employeeId',
+          'Employee ID',
+          'EmployeeId',
           'id',
           'ID'
         ]),
+        role: getField(row, [
+          'role',
+          'Role'
+        ]),
+        site: getField(row, [
+          'site',
+          'Site'
+        ]),
         firstName: getField(row, [
+          'firstname',
           'firstName',
           'FirstName',
           'first_name',
           'First Name'
         ]),
         lastName: getField(row, [
+          'lastname',
           'lastName',
           'LastName',
           'last_name',
           'Last Name'
-        ]),
-        phone: getField(row, [
-          'phone',
-          'Phone',
-          'phoneNumber',
-          'Phone Number'
         ]),
         rawData: row
       };

@@ -144,9 +144,9 @@ function findDuplicateEmails(rows: Array<{ email: string; registrationId?: strin
   return Array.from(duplicates);
 }
 
-function dedupeRows(rows: Array<{ email: string; registrationId?: string; firstName?: string; lastName?: string; phone?: string; rawData: unknown }>) {
+function dedupeRows(rows: Array<{ email: string; employeeId?: string; role?: string; site?: string; firstName?: string; lastName?: string; rawData: unknown }>) {
   const seenEmails = new Set<string>();
-  const unique: Array<{ email: string; registrationId?: string; firstName?: string; lastName?: string; phone?: string; rawData: unknown }> = [];
+  const unique: Array<{ email: string; employeeId?: string; role?: string; site?: string; firstName?: string; lastName?: string; rawData: unknown }> = [];
 
   for (const row of rows) {
     if (!row.email) continue;
@@ -154,10 +154,11 @@ function dedupeRows(rows: Array<{ email: string; registrationId?: string; firstN
     seenEmails.add(row.email);
     unique.push({
       email: row.email,
-      registrationId: row.registrationId,
+      employeeId: row.employeeId,
+      role: row.role,
+      site: row.site,
       firstName: row.firstName,
       lastName: row.lastName,
-      phone: row.phone,
       rawData: row.rawData
     });
   }
