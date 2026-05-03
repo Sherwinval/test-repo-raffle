@@ -1,9 +1,7 @@
 import { parse } from 'csv-parse/sync';
 import XLSX from 'xlsx';
 
-type ParsedRow = Record<string, string | number | boolean | null>;
-
-function getField(row: ParsedRow, names: string[]) {
+function getField(row, names) {
   for (const name of names) {
     const candidate = row[name];
     if (candidate !== undefined && candidate !== null && String(candidate).trim() !== '') {
@@ -13,7 +11,7 @@ function getField(row: ParsedRow, names: string[]) {
   return undefined;
 }
 
-export function parseFileBuffer(buffer: Buffer, ext: string) {
+export function parseFileBuffer(buffer, ext) {
   const rows: ParsedRow[] = ext === 'csv'
     ? parseCsv(buffer)
     : parseExcel(buffer);
@@ -69,7 +67,7 @@ export function parseFileBuffer(buffer: Buffer, ext: string) {
     .filter((row) => typeof row.email === 'string' && row.email.length > 0);
 }
 
-function parseCsv(buffer: Buffer) {
+function parseCsv(buffer) {
   const text = buffer.toString('utf8');
   return parse(text, {
     columns: true,
@@ -78,7 +76,7 @@ function parseCsv(buffer: Buffer) {
   }) as ParsedRow[];
 }
 
-function parseExcel(buffer: Buffer) {
+function parseExcel(buffer) {
   const workbook = XLSX.read(buffer, { type: 'buffer' });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) return [];

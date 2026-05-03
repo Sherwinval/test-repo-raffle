@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "tsc",
+    "dev": "node --watch src/index.js",
+    "build": "echo 'No build step needed for JS'",
     "prisma": "prisma"
   },
   "dependencies": {
@@ -15,14 +15,9 @@
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "multer": "^1.4.5-lts.1",
-    "xlsx": "^0.18.30"
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@types/express": "^4.17.17",
-    "@types/multer": "^1.4.7",
-    "@types/node": "^20.14.2",
-    "prisma": "^5.13.0",
-    "ts-node-dev": "^2.0.0",
-    "typescript": "^5.5.4"
+    "prisma": "^5.13.0"
   }
 }

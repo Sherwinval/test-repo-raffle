@@ -1,21 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 
-type UploadProgress = {
-  status: 'pending' | 'processing' | 'done' | 'error';
-  total?: number;
-  processed: number;
-  inserted: number;
-  duplicateCount: number;
-  error?: string;
-};
-
 function App() {
-  const [file, setFile] = useState<File | null>(null);
-  const [uploadId, setUploadId] = useState<string | null>(null);
-  const [progress, setProgress] = useState<UploadProgress | null>(null);
-  const [duplicateCheck, setDuplicateCheck] = useState<{ totalRows: number; duplicateCount: number; duplicateEmails: string[] } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [stats, setStats] = useState<number | null>(null);
+  const [file, setFile] = useState(null);
+  const [uploadId, setUploadId] = useState(null);
+  const [progress, setProgress] = useState(null);
+  const [duplicateCheck, setDuplicateCheck] = useState(null);
+  const [error, setError] = useState(null);
+  const [stats, setStats] = useState(null);
 
   const progressPercentage = useMemo(() => {
     if (!progress || !progress.total) return 0;
@@ -23,7 +14,7 @@ function App() {
   }, [progress]);
 
   useEffect(() => {
-    let intervalId: number | undefined;
+    let intervalId;
     if (uploadId) {
       intervalId = window.setInterval(async () => {
         try {

@@ -12,16 +12,7 @@ const app = express();
 const port = Number(process.env.PORT || 4000);
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
-interface UploadProgress {
-  status: 'pending' | 'processing' | 'done' | 'error';
-  total?: number;
-  processed: number;
-  inserted: number;
-  duplicateCount: number;
-  error?: string;
-}
-
-const progressMap = new Map<string, UploadProgress>();
+const progressMap = new Map();
 
 app.use(cors());
 app.use(express.json());
@@ -99,7 +90,7 @@ app.listen(port, () => {
   console.log(`Server listening on http://localhost:${port}`);
 });
 
-async function processUpload(uploadId: string, buffer: Buffer, extension: string) {
+async function processUpload(uploadId, buffer, extension) {
   const progress = progressMap.get(uploadId);
   if (!progress) return;
   progress.status = 'processing';
@@ -128,7 +119,7 @@ async function processUpload(uploadId: string, buffer: Buffer, extension: string
   progressMap.set(uploadId, progress);
 }
 
-function findDuplicateEmails(rows: Array<{ email: string; registrationId?: string; firstName?: string; lastName?: string; phone?: string; rawData: unknown }>) {
+function findDuplicateEmails(rows) {
   const seenEmails = new Set<string>();
   const duplicates = new Set<string>();
 
@@ -144,7 +135,7 @@ function findDuplicateEmails(rows: Array<{ email: string; registrationId?: strin
   return Array.from(duplicates);
 }
 
-function dedupeRows(rows: Array<{ email: string; employeeId?: string; role?: string; site?: string; firstName?: string; lastName?: string; rawData: unknown }>) {
+function dedupeRows(rows) {
   const seenEmails = new Set<string>();
   const unique: Array<{ email: string; employeeId?: string; role?: string; site?: string; firstName?: string; lastName?: string; rawData: unknown }> = [];
 
