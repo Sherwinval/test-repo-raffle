@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 function App() {
   const [file, setFile] = useState(null);
@@ -8,6 +8,7 @@ function App() {
   const [stats, setStats] = useState(null);
   const [displayProgress, setDisplayProgress] = useState(0);
   const [duplicateModal, setDuplicateModal] = useState(null);
+  const fileInputRef = useRef(null);
 
   const progressPercentage = useMemo(() => {
     if (!progress || !progress.total) return 0;
@@ -56,6 +57,10 @@ function App() {
           if (data.status === 'done' || data.status === 'error') {
             window.clearInterval(intervalId);
             setUploadId(null);
+            setFile(null);
+            if (fileInputRef.current) {
+              fileInputRef.current.value = '';
+            }
             fetchStats();
           }
         } catch (err) {
@@ -167,6 +172,7 @@ function App() {
             <label className="field">
               <span className="field-label">Select file to upload</span>
               <input
+                ref={fileInputRef}
                 type="file"
                 accept=".csv,.xls,.xlsx"
                 className="file-input"
