@@ -150,6 +150,191 @@ app.get('/api/participants/stats', async (_req, res) => {
   }
 });
 
+// --- Events ---
+
+app.get('/api/events', async (_req, res) => {
+  try {
+    const events = await prisma.event.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, name: true, createdAt: true }
+    });
+    res.json(events);
+  } catch (err) {
+    console.error('Events query failed:', err);
+    res.status(500).json({ error: 'Failed to fetch events.' });
+  }
+});
+
+app.post('/api/events', async (req, res) => {
+  const name = String(req.body?.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Event name is required.' });
+  try {
+    const event = await prisma.event.create({ data: { name } });
+    res.status(201).json(event);
+  } catch (err) {
+    console.error('Event create failed:', err);
+    res.status(500).json({ error: 'Failed to create event.' });
+  }
+});
+
+app.delete('/api/events/:eventId', async (req, res) => {
+  const { eventId } = req.params;
+  try {
+    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    // Delete in FK order: entries first, then batches, then event
+    await prisma.entry.deleteMany({ where: { eventId } });
+    await prisma.uploadBatch.deleteMany({ where: { eventId } });
+    await prisma.event.delete({ where: { id: eventId } });
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error('Event delete failed:', err);
+    res.status(500).json({ error: 'Failed to delete event.' });
+  }
+});
+
+// --- Entry Upload ---
+
+app.post('/api/events/:eventId/entries/upload', upload.single('file'), async (req, res) => {
+  const { eventId } = req.params;
+  const file = req.file;
+
+  if (!file) return res.status(400).json({ error: 'No file uploaded.' });
+
+  const ext = file.originalname.split('.').pop()?.toLowerCase();
+  if (!['csv', 'xls', 'xlsx'].includes(ext)) {
+    return res.status(400).json({ error: 'Unsupported file format. Use CSV, XLS, or XLSX.' });
+  }
+
+  const event = await prisma.event.findUnique({ where: { id: eventId } });
+  if (!event) return res.status(404).json({ error: 'Event not found.' });
+
+  const rows = parseFileBuffer(file.buffer, ext);
+  if (rows.length === 0) return res.status(400).json({ error: 'File is empty.' });
+
+  const firstRow = rows[0];
+  const missingCols = ['employeeId', 'fullName', 'department', 'email', 'entryCode'].filter(
+    (col) => firstRow[col] === undefined
+  );
+  if (missingCols.length > 0) {
+    return res.status(400).json({
+      error: `Missing required columns: ${missingCols.join(', ')}. Download the template for the correct format.`
+    });
+  }
+
+  const incompleteRows = findEntryIncompleteRows(rows);
+  const incompleteSet = new Set(incompleteRows.map((r) => r.rowNumber));
+  const completeRows = rows.filter((r) => !incompleteSet.has(r.rowNumber));
+
+  const fileDuplicateCodes = findDuplicateValues(completeRows.map((r) => r.entryCode));
+  const existingCodes = await findExistingEntryCodes(eventId, completeRows.map((r) => r.entryCode));
+  const fileDuplicateCount = fileDuplicateCodes.length;
+  const existingDuplicateCount = existingCodes.length;
+  const duplicateCount = fileDuplicateCount + existingDuplicateCount;
+
+  const duplicateMode = String(req.body?.duplicateMode || '').toLowerCase();
+  const uploadWithDuplicates = duplicateMode === 'with';
+  const uploadWithoutDuplicates = duplicateMode === 'without';
+
+  if (duplicateCount > 0 && !uploadWithDuplicates && !uploadWithoutDuplicates) {
+    return res.status(409).json({
+      error: 'Duplicates found. Please confirm before upload.',
+      totalRows: rows.length,
+      fileDuplicateCount,
+      existingDuplicateCount,
+      duplicateCount
+    });
+  }
+
+  const batch = await prisma.uploadBatch.create({
+    data: { eventId, status: 'processing', totalRows: rows.length }
+  });
+
+  const uploadId = randomUUID();
+  const rowsToInsert = uploadWithDuplicates
+    ? completeRows
+    : buildEntryRowsWithoutDuplicates(completeRows, existingCodes, fileDuplicateCodes);
+
+  progressMap.set(uploadId, {
+    status: 'pending',
+    total: rows.length,
+    processed: 0,
+    inserted: 0,
+    skippedRows: rows.length - rowsToInsert.length - incompleteRows.length,
+    errors: incompleteRows
+  });
+
+  processEntryUpload(uploadId, batch.id, eventId, rowsToInsert, incompleteRows, rows.length).catch((err) => {
+    const msg = formatUploadError(err);
+    const current = progressMap.get(uploadId) ?? {};
+    progressMap.set(uploadId, { ...current, status: 'error', error: msg });
+  });
+
+  res.status(202).json({ uploadId });
+});
+
+app.get('/api/events/:eventId/entries/stats', async (req, res) => {
+  const { eventId } = req.params;
+  try {
+    const count = await prisma.entry.count({ where: { eventId } });
+    res.json({ totalEntries: count });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch entry stats.' });
+  }
+});
+
+app.get('/api/events/:eventId/entries', async (req, res) => {
+  const { eventId } = req.params;
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize) || 50));
+  const search = String(req.query.search || '').trim();
+  const department = String(req.query.department || '').trim();
+
+  try {
+    const where = {
+      eventId,
+      ...(department ? { department } : {}),
+      ...(search ? {
+        OR: [
+          { employeeId: { contains: search, mode: 'insensitive' } },
+          { fullName: { contains: search, mode: 'insensitive' } },
+          { email: { contains: search, mode: 'insensitive' } },
+          { entryCode: { contains: search, mode: 'insensitive' } }
+        ]
+      } : {})
+    };
+
+    const [entries, total, deptRows] = await Promise.all([
+      prisma.entry.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: { id: true, employeeId: true, fullName: true, department: true, email: true, entryCode: true, createdAt: true }
+      }),
+      prisma.entry.count({ where }),
+      prisma.entry.findMany({
+        where: { eventId },
+        select: { department: true },
+        distinct: ['department'],
+        orderBy: { department: 'asc' }
+      })
+    ]);
+
+    res.json({
+      entries,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+      departments: deptRows.map((r) => r.department)
+    });
+  } catch (err) {
+    console.error('Entries list failed:', err);
+    res.status(500).json({ error: 'Failed to fetch entries.' });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Server listening on http://localhost:${port}`);
 });
@@ -284,4 +469,83 @@ function formatUploadError(error) {
   const message = error.message ? error.message.replace(/\s+/g, ' ').trim() : 'Unknown error';
 
   return `${message}${code}${meta}`;
+}
+
+async function processEntryUpload(uploadId, batchId, eventId, rowsToInsert, errorRows, totalFileRows) {
+  const progress = progressMap.get(uploadId);
+  if (!progress) return;
+  progress.status = 'processing';
+
+  const chunkSize = 500;
+  let insertedTotal = 0;
+
+  for (let start = 0; start < rowsToInsert.length; start += chunkSize) {
+    const chunk = rowsToInsert.slice(start, start + chunkSize);
+    const mapped = chunk.map((row) => ({
+      id: randomUUID(),
+      eventId,
+      uploadBatchId: batchId,
+      employeeId: row.employeeId,
+      fullName: row.fullName,
+      department: row.department,
+      email: row.email,
+      entryCode: row.entryCode
+    }));
+    const result = await prisma.entry.createMany({ data: mapped, skipDuplicates: true });
+    insertedTotal += result.count ?? 0;
+    progress.processed = start + chunk.length;
+    progress.inserted = insertedTotal;
+  }
+
+  const skippedRows = rowsToInsert.length - insertedTotal;
+  progress.status = 'done';
+  progress.processed = totalFileRows;
+  progress.inserted = insertedTotal;
+  progress.skippedRows = skippedRows;
+  progressMap.set(uploadId, progress);
+
+  await prisma.uploadBatch.update({
+    where: { id: batchId },
+    data: {
+      status: 'done',
+      insertedRows: insertedTotal,
+      skippedRows,
+      errors: errorRows.length > 0 ? errorRows : undefined
+    }
+  });
+}
+
+function findEntryIncompleteRows(rows) {
+  const required = ['employeeId', 'fullName', 'department', 'email', 'entryCode'];
+  return rows
+    .map((row) => {
+      const missingFields = required.filter((f) => {
+        const v = row[f];
+        return typeof v !== 'string' || v.trim() === '';
+      });
+      return missingFields.length > 0 ? { rowNumber: row.rowNumber, missingFields } : null;
+    })
+    .filter(Boolean);
+}
+
+async function findExistingEntryCodes(eventId, codes) {
+  const unique = Array.from(new Set((codes || []).filter(Boolean)));
+  if (unique.length === 0) return [];
+  const existing = await prisma.entry.findMany({
+    where: { eventId, entryCode: { in: unique } },
+    select: { entryCode: true }
+  });
+  return existing.map((r) => r.entryCode);
+}
+
+function buildEntryRowsWithoutDuplicates(rows, existingCodes, fileDuplicateCodes) {
+  const existingSet = new Set(existingCodes);
+  const fileSet = new Set(fileDuplicateCodes);
+  const seen = new Set();
+  return rows.filter((row) => {
+    if (existingSet.has(row.entryCode)) return false;
+    if (fileSet.has(row.entryCode) && seen.has(row.entryCode)) return false;
+    seen.add(row.entryCode);
+    return true;
+  });
 }

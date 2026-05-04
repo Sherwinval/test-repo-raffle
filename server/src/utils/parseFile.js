@@ -52,6 +52,33 @@ export function parseFileBuffer(buffer, ext) {
           'id',
           'ID'
         ]),
+        fullName: getField(row, [
+          'full_name',
+          'fullname',
+          'fullName',
+          'FullName',
+          'Full Name',
+          'full name',
+          'name',
+          'Name'
+        ]),
+        department: getField(row, [
+          'department',
+          'Department',
+          'DEPARTMENT',
+          'dept',
+          'Dept'
+        ]),
+        entryCode: getField(row, [
+          'entry_code',
+          'entrycode',
+          'entryCode',
+          'EntryCode',
+          'Entry Code',
+          'entry code',
+          'code',
+          'Code'
+        ]),
         role: getField(row, [
           'role',
           'Role'
@@ -65,9 +92,7 @@ export function parseFileBuffer(buffer, ext) {
           'firstName',
           'FirstName',
           'first_name',
-          'First Name',
-          'name',
-          'Name'
+          'First Name'
         ]),
         lastName: getField(row, [
           'lastname',

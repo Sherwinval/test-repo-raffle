@@ -17,3 +17,40 @@ model Participant {
   rawData     Json?
   createdAt   DateTime @default(now())
 }
+
+model Event {
+  id        String        @id @default(uuid())
+  name      String
+  createdAt DateTime      @default(now())
+  entries   Entry[]
+  batches   UploadBatch[]
+}
+
+model UploadBatch {
+  id           String   @id @default(uuid())
+  eventId      String
+  event        Event    @relation(fields: [eventId], references: [id])
+  status       String
+  totalRows    Int      @default(0)
+  insertedRows Int      @default(0)
+  skippedRows  Int      @default(0)
+  errors       Json?
+  createdAt    DateTime @default(now())
+  entries      Entry[]
+}
+
+model Entry {
+  id            String      @id @default(uuid())
+  eventId       String
+  event         Event       @relation(fields: [eventId], references: [id])
+  employeeId    String
+  fullName      String
+  department    String
+  email         String
+  entryCode     String
+  uploadBatchId String
+  batch         UploadBatch @relation(fields: [uploadBatchId], references: [id])
+  createdAt     DateTime    @default(now())
+
+  @@unique([eventId, entryCode])
+}
