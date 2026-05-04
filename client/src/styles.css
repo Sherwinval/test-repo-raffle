@@ -294,6 +294,57 @@ body {
   letter-spacing: -0.02em;
 }
 
+.dup-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: grid;
+  place-items: center;
+  z-index: 50;
+  padding: 1rem;
+}
+
+.dup-modal {
+  width: min(560px, 100%);
+  border-radius: 1rem;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.32);
+  padding: 1.25rem;
+  position: relative;
+}
+
+.dup-modal-close {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.6rem;
+  border: none;
+  background: transparent;
+  color: #0f172a;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.dup-modal-title {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+
+.dup-modal-copy {
+  margin-top: 0.65rem;
+  color: #334155;
+}
+
+.dup-modal-actions {
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 @keyframes rise-in {
   from {
     opacity: 0;

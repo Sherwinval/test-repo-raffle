@@ -31,11 +31,36 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
   const uploadId = randomUUID();
   const rows = parseFileBuffer(file.buffer, extension);
   const incompleteRows = findIncompleteRows(rows);
+  const insertRows = mapRowsForInsert(rows, extension);
+  const fileDuplicateEmails = findDuplicateValues(insertRows.map((row) => row.email));
+  const fileDuplicateEmployeeIds = findDuplicateValues(insertRows.map((row) => row.employeeId));
+  const existingDuplicateEmails = await findExistingEmails(insertRows.map((row) => row.email));
+  const existingDuplicateEmployeeIds = await findExistingEmployeeIds(insertRows.map((row) => row.employeeId));
+  const fileDuplicateCount = fileDuplicateEmails.length + fileDuplicateEmployeeIds.length;
+  const existingDuplicateCount = existingDuplicateEmails.length + existingDuplicateEmployeeIds.length;
+  const duplicateCount = fileDuplicateCount + existingDuplicateCount;
+  const duplicateMode = String(req.body?.duplicateMode || '').toLowerCase();
+  const uploadWithDuplicates = duplicateMode === 'with';
+  const uploadWithoutDuplicates = duplicateMode === 'without';
 
   if (incompleteRows.length > 0) {
     return res.status(400).json({
       error: `Upload blocked: ${incompleteRows.length} row(s) have missing required fields (email, employeeId, firstName, lastName, role, site).`,
       incompleteRows: incompleteRows.slice(0, 20)
+    });
+  }
+
+  if (duplicateCount > 0 && !uploadWithDuplicates && !uploadWithoutDuplicates) {
+    return res.status(409).json({
+      error: `Duplicates found. Please confirm before upload.`,
+      totalRows: rows.length,
+      fileDuplicateCount,
+      existingDuplicateCount,
+      duplicateCount,
+      duplicateEmails: fileDuplicateEmails,
+      duplicateEmployeeIds: fileDuplicateEmployeeIds,
+      existingDuplicateEmails,
+      existingDuplicateEmployeeIds
     });
   }
 
@@ -46,7 +71,11 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     duplicateCount: 0
   });
 
-  processUpload(uploadId, rows, extension).catch((error) => {
+  const rowsToInsert = uploadWithDuplicates
+    ? insertRows
+    : buildRowsWithoutDuplicates(insertRows, existingDuplicateEmails, existingDuplicateEmployeeIds);
+
+  processUpload(uploadId, rowsToInsert).catch((error) => {
     const detailedMessage = formatUploadError(error);
     progressMap.set(uploadId, {
       status: 'error',
@@ -81,14 +110,24 @@ app.post('/api/upload/validate', upload.single('file'), async (req, res) => {
     });
   }
 
-  const uniqueRows = dedupeRows(rows);
-  const duplicateEmails = findDuplicateEmails(rows);
+  const insertRows = mapRowsForInsert(rows, extension);
+  const fileDuplicateEmails = findDuplicateValues(insertRows.map((row) => row.email));
+  const fileDuplicateEmployeeIds = findDuplicateValues(insertRows.map((row) => row.employeeId));
+  const existingDuplicateEmails = await findExistingEmails(insertRows.map((row) => row.email));
+  const existingDuplicateEmployeeIds = await findExistingEmployeeIds(insertRows.map((row) => row.employeeId));
+  const fileDuplicateCount = fileDuplicateEmails.length + fileDuplicateEmployeeIds.length;
+  const existingDuplicateCount = existingDuplicateEmails.length + existingDuplicateEmployeeIds.length;
 
   res.json({
     totalRows: rows.length,
-    duplicateCount: rows.length - uniqueRows.length,
-    uniqueRows: uniqueRows.length,
-    duplicateEmails
+    fileDuplicateCount,
+    existingDuplicateCount,
+    duplicateCount: fileDuplicateCount + existingDuplicateCount,
+    uniqueRows: insertRows.length,
+    duplicateEmails: fileDuplicateEmails,
+    duplicateEmployeeIds: fileDuplicateEmployeeIds,
+    existingDuplicateEmails,
+    existingDuplicateEmployeeIds
   });
 });
 
@@ -115,58 +154,34 @@ app.listen(port, () => {
   console.log(`Server listening on http://localhost:${port}`);
 });
 
-async function processUpload(uploadId, rows, fileType) {
+async function processUpload(uploadId, insertRows) {
   const progress = progressMap.get(uploadId);
   if (!progress) return;
   progress.status = 'processing';
-  progress.total = rows.length;
-
-  const uniqueRows = dedupeRows(rows, fileType);
-  progress.duplicateCount = rows.length - uniqueRows.length;
+  progress.total = insertRows.length;
+  progress.duplicateCount = 0;
 
   const chunkSize = 1000;
   let insertedTotal = 0;
 
-  for (let start = 0; start < uniqueRows.length; start += chunkSize) {
-    const chunk = uniqueRows.slice(start, start + chunkSize);
+  for (let start = 0; start < insertRows.length; start += chunkSize) {
+    const chunk = insertRows.slice(start, start + chunkSize);
     const result = await prisma.participant.createMany({
-      data: chunk,
-      skipDuplicates: true
+      data: chunk
     });
     insertedTotal += result.count ?? 0;
-    progress.processed = Math.min(uniqueRows.length, start + chunk.length);
+    progress.processed = Math.min(insertRows.length, start + chunk.length);
     progress.inserted = insertedTotal;
+    progress.duplicateCount = 0;
   }
 
   progress.status = 'done';
   progressMap.set(uploadId, progress);
 }
 
-function findDuplicateEmails(rows) {
-  const seenEmails = new Set();
-  const duplicates = new Set();
-
-  for (const row of rows) {
-    if (!row.email) continue;
-    if (seenEmails.has(row.email)) {
-      duplicates.add(row.email);
-    } else {
-      seenEmails.add(row.email);
-    }
-  }
-
-  return Array.from(duplicates);
-}
-
-function dedupeRows(rows, fileType) {
-  const seenEmails = new Set();
-  const unique = [];
-
-  for (const row of rows) {
-    if (!row.email) continue;
-    if (seenEmails.has(row.email)) continue;
-    seenEmails.add(row.email);
-    unique.push({
+function mapRowsForInsert(rows, fileType) {
+  return rows.map((row) => {
+    return {
       id: randomUUID(),
       email: row.email,
       employeeId: row.employeeId,
@@ -175,10 +190,24 @@ function dedupeRows(rows, fileType) {
       firstName: row.firstName,
       lastName: row.lastName,
       rawData: { fileType }
-    });
+    };
+  });
+}
+
+function findDuplicateValues(values) {
+  const seen = new Set();
+  const duplicates = new Set();
+
+  for (const value of values) {
+    if (!value) continue;
+    if (seen.has(value)) {
+      duplicates.add(value);
+    } else {
+      seen.add(value);
+    }
   }
 
-  return unique;
+  return Array.from(duplicates);
 }
 
 function findIncompleteRows(rows) {
@@ -200,6 +229,51 @@ function findIncompleteRows(rows) {
   }
 
   return missingByRow;
+}
+
+async function findExistingEmails(emails) {
+  const normalized = Array.from(new Set((emails || []).filter(Boolean)));
+  if (normalized.length === 0) return [];
+
+  const existing = await prisma.participant.findMany({
+    where: { email: { in: normalized } },
+    select: { email: true }
+  });
+
+  return existing.map((row) => row.email);
+}
+
+async function findExistingEmployeeIds(employeeIds) {
+  const normalized = Array.from(new Set((employeeIds || []).filter(Boolean)));
+  if (normalized.length === 0) return [];
+
+  const existing = await prisma.participant.findMany({
+    where: { employeeId: { in: normalized } },
+    select: { employeeId: true }
+  });
+
+  return existing.map((row) => row.employeeId).filter(Boolean);
+}
+
+function buildRowsWithoutDuplicates(rows, existingDuplicateEmails, existingDuplicateEmployeeIds) {
+  const existingEmails = new Set(existingDuplicateEmails);
+  const existingEmployeeIds = new Set(existingDuplicateEmployeeIds);
+  const seenEmails = new Set();
+  const seenEmployeeIds = new Set();
+  const filtered = [];
+
+  for (const row of rows) {
+    if (existingEmails.has(row.email)) continue;
+    if (row.employeeId && existingEmployeeIds.has(row.employeeId)) continue;
+    if (seenEmails.has(row.email)) continue;
+    if (row.employeeId && seenEmployeeIds.has(row.employeeId)) continue;
+
+    seenEmails.add(row.email);
+    if (row.employeeId) seenEmployeeIds.add(row.employeeId);
+    filtered.push(row);
+  }
+
+  return filtered;
 }
 
 function formatUploadError(error) {

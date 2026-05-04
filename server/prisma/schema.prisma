@@ -8,8 +8,8 @@ datasource db {
 
 model Participant {
   id          String   @id @default(uuid())
-  employeeId  String?  @unique
-  email       String   @unique
+  employeeId  String?
+  email       String
   role        String?
   site        String?
   firstName   String?

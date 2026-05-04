@@ -4,14 +4,38 @@ function App() {
   const [file, setFile] = useState(null);
   const [uploadId, setUploadId] = useState(null);
   const [progress, setProgress] = useState(null);
-  const [duplicateCheck, setDuplicateCheck] = useState(null);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState(null);
+  const [displayProgress, setDisplayProgress] = useState(0);
+  const [duplicateModal, setDuplicateModal] = useState(null);
 
   const progressPercentage = useMemo(() => {
     if (!progress || !progress.total) return 0;
     return Math.min(100, Math.round((progress.processed / progress.total) * 100));
   }, [progress]);
+
+  useEffect(() => {
+    let timerId;
+    setDisplayProgress((current) => {
+      if (progressPercentage <= current) return current;
+      return current;
+    });
+
+    timerId = window.setInterval(() => {
+      setDisplayProgress((current) => {
+        if (current >= progressPercentage) {
+          window.clearInterval(timerId);
+          return current;
+        }
+        const step = Math.max(1, Math.ceil((progressPercentage - current) / 8));
+        return Math.min(progressPercentage, current + step);
+      });
+    }, 120);
+
+    return () => {
+      window.clearInterval(timerId);
+    };
+  }, [progressPercentage]);
 
   useEffect(() => {
     let intervalId;
@@ -61,7 +85,7 @@ function App() {
     fetchStats();
   }, []);
 
-  async function handleUpload(allowDuplicates = false) {
+  async function handleUpload(duplicateMode = null) {
     if (!file) {
       setError('Please choose a CSV or Excel file first.');
       return;
@@ -69,12 +93,15 @@ function App() {
 
     setError(null);
     setProgress(null);
-    setDuplicateCheck(null);
+    setDisplayProgress(0);
 
     const formData = new FormData();
     formData.append('file', file);
+    if (duplicateMode) {
+      formData.append('duplicateMode', duplicateMode);
+    }
 
-    if (!allowDuplicates) {
+    if (!duplicateMode) {
       const validateResponse = await fetch('/api/upload/validate', {
         method: 'POST',
         body: formData
@@ -88,10 +115,11 @@ function App() {
 
       const validationData = await validateResponse.json();
       if (validationData.duplicateCount > 0) {
-        setDuplicateCheck({
-          totalRows: validationData.totalRows,
+        setDuplicateModal({
+          totalRows: validationData.totalRows ?? 0,
           duplicateCount: validationData.duplicateCount,
-          duplicateEmails: validationData.duplicateEmails ?? []
+          fileDuplicateCount: validationData.fileDuplicateCount ?? 0,
+          existingDuplicateCount: validationData.existingDuplicateCount ?? 0
         });
         return;
       }
@@ -104,17 +132,21 @@ function App() {
 
     if (!response.ok) {
       const body = await response.json();
+      if (response.status === 409) {
+        setDuplicateModal({
+          totalRows: body.totalRows ?? 0,
+          duplicateCount: body.duplicateCount ?? 0,
+          fileDuplicateCount: body.fileDuplicateCount ?? 0,
+          existingDuplicateCount: body.existingDuplicateCount ?? 0
+        });
+        return;
+      }
       setError(body?.error || 'Upload failed.');
       return;
     }
 
     const { uploadId: returnedId } = await response.json();
     setUploadId(returnedId);
-    setDuplicateCheck(null);
-  }
-
-  async function uploadAnyway() {
-    await handleUpload(true);
   }
 
   return (
@@ -140,7 +172,6 @@ function App() {
                 className="file-input"
                 onChange={(event) => {
                   setFile(event.target.files?.[0] ?? null);
-                  setDuplicateCheck(null);
                   setError(null);
                 }}
               />
@@ -148,7 +179,7 @@ function App() {
 
             <button
               className="btn-primary action-btn"
-              onClick={handleUpload}
+              onClick={() => handleUpload(false)}
               disabled={!file || Boolean(uploadId)}
             >
               {uploadId ? 'Uploading...' : 'Start upload'}
@@ -157,36 +188,6 @@ function App() {
 
           <div className="status-stack">
             {error ? <div className="error-card">{error}</div> : null}
-
-            {duplicateCheck ? (
-              <div className="warn-card">
-                <p className="card-heading">Duplicate entries detected</p>
-                <p className="card-copy">
-                  Your file contains {duplicateCheck.duplicateCount} duplicate record{duplicateCheck.duplicateCount === 1 ? '' : 's'} out of {duplicateCheck.totalRows} total rows.
-                </p>
-                <p className="card-copy">
-                  The system will dedupe by email and skip duplicate inserts on upload.
-                </p>
-                {duplicateCheck.duplicateEmails.length > 0 ? (
-                  <div className="warn-inner">
-                    <p className="card-subheading">Duplicate email addresses</p>
-                    <ul className="email-list">
-                      {duplicateCheck.duplicateEmails.slice(0, 10).map((email) => (
-                        <li key={email}>{email}</li>
-                      ))}
-                    </ul>
-                    {duplicateCheck.duplicateEmails.length > 10 ? (
-                      <p className="muted-note">
-                        And {duplicateCheck.duplicateEmails.length - 10} more duplicate email{duplicateCheck.duplicateEmails.length - 10 === 1 ? '' : 's'}.
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-                <button className="warn-btn" onClick={uploadAnyway}>
-                  Upload anyway
-                </button>
-              </div>
-            ) : null}
 
             {progress ? (
               <div className="soft-card">
@@ -203,7 +204,7 @@ function App() {
                   </div>
                 </div>
                 <div className="progress-track">
-                  <div className="progress-fill" style={{ width: `${progressPercentage}%` }} />
+                  <div className="progress-fill" style={{ width: `${displayProgress}%` }} />
                 </div>
               </div>
             ) : null}
@@ -215,6 +216,52 @@ function App() {
           </div>
         </div>
       </div>
+      {duplicateModal ? (
+        <div className="dup-modal-backdrop" onClick={() => setDuplicateModal(null)}>
+          <div className="dup-modal" onClick={(event) => event.stopPropagation()}>
+            <button
+              type="button"
+              className="dup-modal-close"
+              onClick={() => setDuplicateModal(null)}
+              aria-label="Close duplicate options"
+            >
+              x
+            </button>
+            <h2 className="dup-modal-title">Duplicate Entries Detected</h2>
+            <p className="dup-modal-copy">
+              Uploaded dataset rows: {duplicateModal.totalRows}
+            </p>
+            <p className="dup-modal-copy">
+              Duplicate rows detected: {duplicateModal.duplicateCount}
+            </p>
+            <p className="dup-modal-copy">
+              In-file duplicates: {duplicateModal.fileDuplicateCount} | Already in database: {duplicateModal.existingDuplicateCount}
+            </p>
+            <div className="dup-modal-actions">
+              <button
+                type="button"
+                className="warn-btn"
+                onClick={() => {
+                  setDuplicateModal(null);
+                  handleUpload('with');
+                }}
+              >
+                Upload with duplicates
+              </button>
+              <button
+                type="button"
+                className="btn-primary action-btn"
+                onClick={() => {
+                  setDuplicateModal(null);
+                  handleUpload('without');
+                }}
+              >
+                Upload without duplicates
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
