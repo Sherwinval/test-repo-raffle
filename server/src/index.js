@@ -227,9 +227,17 @@ app.post('/api/events/:eventId/entries/upload', upload.single('file'), async (re
   const completeRows = rows.filter((r) => !incompleteSet.has(r.rowNumber));
 
   const fileDuplicateCodes = findDuplicateValues(completeRows.map((r) => r.entryCode));
-  const existingCodes = await findExistingEntryCodes(eventId, completeRows.map((r) => r.entryCode));
-  const fileDuplicateCount = fileDuplicateCodes.length;
-  const existingDuplicateCount = existingCodes.length;
+  const fileDuplicateEmployeeIds = findDuplicateValues(completeRows.map((r) => r.employeeId));
+  const fileDuplicateEmails = findDuplicateValues(completeRows.map((r) => r.email));
+
+  const [existingCodes, existingEmployeeIds, existingEmails] = await Promise.all([
+    findExistingEntryCodes(eventId, completeRows.map((r) => r.entryCode)),
+    findExistingEntryEmployeeIds(eventId, completeRows.map((r) => r.employeeId)),
+    findExistingEntryEmails(eventId, completeRows.map((r) => r.email))
+  ]);
+
+  const fileDuplicateCount = fileDuplicateCodes.length + fileDuplicateEmployeeIds.length + fileDuplicateEmails.length;
+  const existingDuplicateCount = existingCodes.length + existingEmployeeIds.length + existingEmails.length;
   const duplicateCount = fileDuplicateCount + existingDuplicateCount;
 
   const duplicateMode = String(req.body?.duplicateMode || '').toLowerCase();
@@ -253,7 +261,7 @@ app.post('/api/events/:eventId/entries/upload', upload.single('file'), async (re
   const uploadId = randomUUID();
   const rowsToInsert = uploadWithDuplicates
     ? completeRows
-    : buildEntryRowsWithoutDuplicates(completeRows, existingCodes, fileDuplicateCodes);
+    : buildEntryRowsWithoutDuplicates(completeRows, existingCodes, existingEmployeeIds, existingEmails);
 
   progressMap.set(uploadId, {
     status: 'pending',
@@ -497,7 +505,7 @@ async function processEntryUpload(uploadId, batchId, eventId, rowsToInsert, erro
     progress.inserted = insertedTotal;
   }
 
-  const skippedRows = rowsToInsert.length - insertedTotal;
+  const skippedRows = totalFileRows - errorRows.length - insertedTotal;
   progress.status = 'done';
   progress.processed = totalFileRows;
   progress.inserted = insertedTotal;
@@ -538,14 +546,45 @@ async function findExistingEntryCodes(eventId, codes) {
   return existing.map((r) => r.entryCode);
 }
 
-function buildEntryRowsWithoutDuplicates(rows, existingCodes, fileDuplicateCodes) {
-  const existingSet = new Set(existingCodes);
-  const fileSet = new Set(fileDuplicateCodes);
-  const seen = new Set();
+async function findExistingEntryEmployeeIds(eventId, employeeIds) {
+  const unique = Array.from(new Set((employeeIds || []).filter(Boolean)));
+  if (unique.length === 0) return [];
+  const existing = await prisma.entry.findMany({
+    where: { eventId, employeeId: { in: unique } },
+    select: { employeeId: true }
+  });
+  return [...new Set(existing.map((r) => r.employeeId))];
+}
+
+async function findExistingEntryEmails(eventId, emails) {
+  const unique = Array.from(new Set((emails || []).filter(Boolean)));
+  if (unique.length === 0) return [];
+  const existing = await prisma.entry.findMany({
+    where: { eventId, email: { in: unique } },
+    select: { email: true }
+  });
+  return [...new Set(existing.map((r) => r.email))];
+}
+
+function buildEntryRowsWithoutDuplicates(rows, existingCodes, existingEmployeeIds, existingEmails) {
+  const existingCodeSet = new Set(existingCodes);
+  const existingEmployeeIdSet = new Set(existingEmployeeIds);
+  const existingEmailSet = new Set(existingEmails);
+  const seenCodes = new Set();
+  const seenEmployeeIds = new Set();
+  const seenEmails = new Set();
+
   return rows.filter((row) => {
-    if (existingSet.has(row.entryCode)) return false;
-    if (fileSet.has(row.entryCode) && seen.has(row.entryCode)) return false;
-    seen.add(row.entryCode);
+    if (existingCodeSet.has(row.entryCode)) return false;
+    if (row.employeeId && existingEmployeeIdSet.has(row.employeeId)) return false;
+    if (row.email && existingEmailSet.has(row.email)) return false;
+    if (seenCodes.has(row.entryCode)) return false;
+    if (row.employeeId && seenEmployeeIds.has(row.employeeId)) return false;
+    if (row.email && seenEmails.has(row.email)) return false;
+
+    seenCodes.add(row.entryCode);
+    if (row.employeeId) seenEmployeeIds.add(row.employeeId);
+    if (row.email) seenEmails.add(row.email);
     return true;
   });
 }
