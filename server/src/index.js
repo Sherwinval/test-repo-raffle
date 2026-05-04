@@ -269,6 +269,8 @@ app.post('/api/events/:eventId/entries/upload', upload.single('file'), async (re
     processed: 0,
     inserted: 0,
     skippedRows: rows.length - rowsToInsert.length - incompleteRows.length,
+    duplicatesDetected: duplicateCount,
+    uploadMode: duplicateMode || 'none',
     errors: incompleteRows
   });
 
