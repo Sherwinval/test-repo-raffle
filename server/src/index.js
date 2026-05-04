@@ -9,7 +9,7 @@ import { parseFileBuffer } from './utils/parseFile.js';
 dotenv.config();
 
 const app = express();
-const port = Number(process.env.PORT || 4000);
+const port = Number(process.env.PORT || 5000);
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 const progressMap = new Map();
@@ -82,8 +82,13 @@ app.get('/api/upload/progress/:uploadId', (req, res) => {
 });
 
 app.get('/api/participants/stats', async (_req, res) => {
-  const count = await prisma.participant.count();
-  res.json({ totalParticipants: count });
+  try {
+    const count = await prisma.participant.count();
+    res.json({ totalParticipants: count });
+  } catch (err) {
+    console.error('Stats query failed:', err);
+    res.status(500).json({ error: 'Failed to fetch stats.' });
+  }
 });
 
 app.listen(port, () => {
@@ -120,8 +125,8 @@ async function processUpload(uploadId, buffer, extension) {
 }
 
 function findDuplicateEmails(rows) {
-  const seenEmails = new Set<string>();
-  const duplicates = new Set<string>();
+  const seenEmails = new Set();
+  const duplicates = new Set();
 
   for (const row of rows) {
     if (!row.email) continue;
@@ -136,8 +141,8 @@ function findDuplicateEmails(rows) {
 }
 
 function dedupeRows(rows) {
-  const seenEmails = new Set<string>();
-  const unique: Array<{ email: string; employeeId?: string; role?: string; site?: string; firstName?: string; lastName?: string; rawData: unknown }> = [];
+  const seenEmails = new Set();
+  const unique = [];
 
   for (const row of rows) {
     if (!row.email) continue;
