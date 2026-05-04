@@ -12,7 +12,7 @@ function getField(row, names) {
 }
 
 export function parseFileBuffer(buffer, ext) {
-  const rows: ParsedRow[] = ext === 'csv'
+  const rows = ext === 'csv'
     ? parseCsv(buffer)
     : parseExcel(buffer);
 
@@ -73,7 +73,7 @@ function parseCsv(buffer) {
     columns: true,
     skip_empty_lines: true,
     trim: true
-  }) as ParsedRow[];
+  });
 }
 
 function parseExcel(buffer) {
@@ -81,5 +81,5 @@ function parseExcel(buffer) {
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) return [];
   const sheet = workbook.Sheets[sheetName];
-  return XLSX.utils.sheet_to_json<ParsedRow>(sheet, { defval: null });
+  return XLSX.utils.sheet_to_json(sheet, { defval: null });
 }
