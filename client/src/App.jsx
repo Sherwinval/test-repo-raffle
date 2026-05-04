@@ -115,21 +115,26 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="mx-auto max-w-4xl px-4 py-10">
-        <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-          <h1 className="text-3xl font-semibold text-slate-900">Entry Upload</h1>
-          <p className="mt-2 text-slate-600">
-            Upload a participant CSV or Excel file and monitor progress while Prisma persists data to Supabase/Postgres.
+    <div className="page-shell app-root">
+      <div className="app-container">
+        <div className="hero-card">
+          <div className="badge-row">
+            <span className="pill">Data Intake</span>
+            <span className="pill">CSV / XLS / XLSX</span>
+          </div>
+
+          <h1 className="title">Entry Upload</h1>
+          <p className="subtitle">
+            Import participant data from CSV or Excel, review duplicates before insert, and watch live progress while records are saved.
           </p>
 
-          <div className="mt-8 space-y-4">
-            <label className="block">
-              <span className="text-sm font-medium text-slate-700">Select file</span>
+          <div className="upload-row">
+            <label className="field">
+              <span className="field-label">Select file to upload</span>
               <input
                 type="file"
                 accept=".csv,.xls,.xlsx"
-                className="mt-2 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 outline-none focus:border-slate-500"
+                className="file-input"
                 onChange={(event) => {
                   setFile(event.target.files?.[0] ?? null);
                   setDuplicateCheck(null);
@@ -139,70 +144,69 @@ function App() {
             </label>
 
             <button
-              className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="btn-primary action-btn"
               onClick={handleUpload}
               disabled={!file || Boolean(uploadId)}
             >
-              {uploadId ? 'Uploading…' : 'Start upload'}
+              {uploadId ? 'Uploading...' : 'Start upload'}
             </button>
+          </div>
 
-            {error ? <div className="rounded-2xl bg-rose-50 p-4 text-rose-700">{error}</div> : null}
+          <div className="status-stack">
+            {error ? <div className="error-card">{error}</div> : null}
 
             {duplicateCheck ? (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
-                <p className="font-semibold">Duplicate entries detected</p>
-                <p className="mt-2 text-sm text-amber-900">
+              <div className="warn-card">
+                <p className="card-heading">Duplicate entries detected</p>
+                <p className="card-copy">
                   Your file contains {duplicateCheck.duplicateCount} duplicate record{duplicateCheck.duplicateCount === 1 ? '' : 's'} out of {duplicateCheck.totalRows} total rows.
                 </p>
-                <p className="mt-2 text-sm text-amber-900">
+                <p className="card-copy">
                   The system will dedupe by email and skip duplicate inserts on upload.
                 </p>
                 {duplicateCheck.duplicateEmails.length > 0 ? (
-                  <div className="mt-4 rounded-2xl bg-amber-100 p-3 text-sm text-slate-800">
-                    <p className="font-medium">Duplicate email addresses</p>
-                    <ul className="mt-2 list-disc space-y-1 pl-5">
+                  <div className="warn-inner">
+                    <p className="card-subheading">Duplicate email addresses</p>
+                    <ul className="email-list">
                       {duplicateCheck.duplicateEmails.slice(0, 10).map((email) => (
                         <li key={email}>{email}</li>
                       ))}
                     </ul>
                     {duplicateCheck.duplicateEmails.length > 10 ? (
-                      <p className="mt-2 text-xs text-slate-600">
+                      <p className="muted-note">
                         And {duplicateCheck.duplicateEmails.length - 10} more duplicate email{duplicateCheck.duplicateEmails.length - 10 === 1 ? '' : 's'}.
                       </p>
                     ) : null}
                   </div>
                 ) : null}
-                <button
-                  className="mt-4 inline-flex items-center justify-center rounded-xl bg-amber-900 px-5 py-3 text-sm font-semibold text-white hover:bg-amber-700"
-                  onClick={uploadAnyway}
-                >
+                <button className="warn-btn" onClick={uploadAnyway}>
                   Upload anyway
                 </button>
               </div>
             ) : null}
 
             {progress ? (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center justify-between gap-4">
+              <div className="soft-card">
+                <div className="split-row">
                   <div>
-                    <p className="text-sm font-semibold text-slate-800">Upload status</p>
-                    <p className="text-xs text-slate-500">{progress.status}</p>
+                    <p className="card-heading">Upload status</p>
+                    <p className="tiny-copy">{progress.status}</p>
                   </div>
-                  <div className="text-right text-sm text-slate-700">
+                  <div className="stat-col">
                     <p>{progress.total ? `${progress.processed}/${progress.total}` : progress.processed} processed</p>
                     <p>{progress.inserted} inserted</p>
                     <p>{progress.duplicateCount} skipped duplicates</p>
                   </div>
                 </div>
-                <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-200">
-                  <div className="h-full rounded-full bg-slate-900" style={{ width: `${progressPercentage}%` }} />
+                <div className="progress-track">
+                  <div className="progress-fill" style={{ width: `${progressPercentage}%` }} />
                 </div>
               </div>
             ) : null}
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm font-semibold text-slate-800">Total participants stored</p>
-              <p className="mt-2 text-3xl font-semibold text-slate-900">{stats ?? '—'}</p>
+            <div className="soft-card">
+              <p className="card-heading">Total participants stored</p>
+              <p className="total-value">{stats ?? '-'}</p>
             </div>
           </div>
         </div>
