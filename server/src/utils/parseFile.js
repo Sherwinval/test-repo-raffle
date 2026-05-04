@@ -2,13 +2,25 @@ import { parse } from 'csv-parse/sync';
 import XLSX from 'xlsx';
 
 function getField(row, names) {
+  const normalizedRow = {};
+  for (const [key, value] of Object.entries(row)) {
+    normalizedRow[normalizeHeader(key)] = value;
+  }
+
   for (const name of names) {
-    const candidate = row[name];
+    const candidate = normalizedRow[normalizeHeader(name)];
     if (candidate !== undefined && candidate !== null && String(candidate).trim() !== '') {
       return String(candidate).trim();
     }
   }
   return undefined;
+}
+
+function normalizeHeader(value) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_\-]+/g, '');
 }
 
 export function parseFileBuffer(buffer, ext) {
@@ -17,7 +29,7 @@ export function parseFileBuffer(buffer, ext) {
     : parseExcel(buffer);
 
   return rows
-    .map((row) => {
+    .map((row, index) => {
       const email = getField(row, [
         'email',
         'Email',
@@ -34,6 +46,7 @@ export function parseFileBuffer(buffer, ext) {
           'employee id',
           'employee_id',
           'employeeId',
+          'employeeid',
           'Employee ID',
           'EmployeeId',
           'id',
@@ -52,7 +65,9 @@ export function parseFileBuffer(buffer, ext) {
           'firstName',
           'FirstName',
           'first_name',
-          'First Name'
+          'First Name',
+          'name',
+          'Name'
         ]),
         lastName: getField(row, [
           'lastname',
@@ -61,10 +76,10 @@ export function parseFileBuffer(buffer, ext) {
           'last_name',
           'Last Name'
         ]),
-        rawData: row
+        rawData: row,
+        rowNumber: index + 2
       };
-    })
-    .filter((row) => typeof row.email === 'string' && row.email.length > 0);
+    });
 }
 
 function parseCsv(buffer) {

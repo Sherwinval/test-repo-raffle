@@ -29,6 +29,16 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
   }
 
   const uploadId = randomUUID();
+  const rows = parseFileBuffer(file.buffer, extension);
+  const incompleteRows = findIncompleteRows(rows);
+
+  if (incompleteRows.length > 0) {
+    return res.status(400).json({
+      error: `Upload blocked: ${incompleteRows.length} row(s) have missing required fields (email, employeeId, firstName, lastName, role, site).`,
+      incompleteRows: incompleteRows.slice(0, 20)
+    });
+  }
+
   progressMap.set(uploadId, {
     status: 'pending',
     processed: 0,
@@ -36,13 +46,14 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     duplicateCount: 0
   });
 
-  processUpload(uploadId, file.buffer, extension).catch((error) => {
+  processUpload(uploadId, rows, extension).catch((error) => {
+    const detailedMessage = formatUploadError(error);
     progressMap.set(uploadId, {
       status: 'error',
       processed: 0,
       inserted: 0,
       duplicateCount: 0,
-      error: error instanceof Error ? error.message : String(error)
+      error: detailedMessage
     });
   });
 
@@ -61,6 +72,15 @@ app.post('/api/upload/validate', upload.single('file'), async (req, res) => {
   }
 
   const rows = parseFileBuffer(file.buffer, extension);
+  const incompleteRows = findIncompleteRows(rows);
+
+  if (incompleteRows.length > 0) {
+    return res.status(400).json({
+      error: `Validation failed: ${incompleteRows.length} row(s) have missing required fields (email, employeeId, firstName, lastName, role, site).`,
+      incompleteRows: incompleteRows.slice(0, 20)
+    });
+  }
+
   const uniqueRows = dedupeRows(rows);
   const duplicateEmails = findDuplicateEmails(rows);
 
@@ -95,15 +115,13 @@ app.listen(port, () => {
   console.log(`Server listening on http://localhost:${port}`);
 });
 
-async function processUpload(uploadId, buffer, extension) {
+async function processUpload(uploadId, rows, fileType) {
   const progress = progressMap.get(uploadId);
   if (!progress) return;
   progress.status = 'processing';
-
-  const rows = parseFileBuffer(buffer, extension);
   progress.total = rows.length;
 
-  const uniqueRows = dedupeRows(rows);
+  const uniqueRows = dedupeRows(rows, fileType);
   progress.duplicateCount = rows.length - uniqueRows.length;
 
   const chunkSize = 1000;
@@ -140,7 +158,7 @@ function findDuplicateEmails(rows) {
   return Array.from(duplicates);
 }
 
-function dedupeRows(rows) {
+function dedupeRows(rows, fileType) {
   const seenEmails = new Set();
   const unique = [];
 
@@ -149,15 +167,47 @@ function dedupeRows(rows) {
     if (seenEmails.has(row.email)) continue;
     seenEmails.add(row.email);
     unique.push({
+      id: randomUUID(),
       email: row.email,
       employeeId: row.employeeId,
       role: row.role,
       site: row.site,
       firstName: row.firstName,
       lastName: row.lastName,
-      rawData: row.rawData
+      rawData: { fileType }
     });
   }
 
   return unique;
+}
+
+function findIncompleteRows(rows) {
+  const requiredFields = ['email', 'employeeId', 'firstName', 'lastName', 'role', 'site'];
+  const missingByRow = [];
+
+  for (const row of rows) {
+    const missingFields = requiredFields.filter((field) => {
+      const value = row[field];
+      return typeof value !== 'string' || value.trim() === '';
+    });
+
+    if (missingFields.length > 0) {
+      missingByRow.push({
+        rowNumber: row.rowNumber,
+        missingFields
+      });
+    }
+  }
+
+  return missingByRow;
+}
+
+function formatUploadError(error) {
+  if (!(error instanceof Error)) return String(error);
+
+  const code = error.code ? ` code=${error.code}` : '';
+  const meta = error.meta ? ` meta=${JSON.stringify(error.meta)}` : '';
+  const message = error.message ? error.message.replace(/\s+/g, ' ').trim() : 'Unknown error';
+
+  return `${message}${code}${meta}`;
 }

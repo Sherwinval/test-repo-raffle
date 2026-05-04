@@ -26,6 +26,9 @@ function App() {
           }
           const data = await res.json();
           setProgress(data);
+          if (data.status === 'error' && data.error) {
+            setError(data.error);
+          }
           if (data.status === 'done' || data.status === 'error') {
             window.clearInterval(intervalId);
             setUploadId(null);
@@ -191,6 +194,7 @@ function App() {
                   <div>
                     <p className="card-heading">Upload status</p>
                     <p className="tiny-copy">{progress.status}</p>
+                    {progress.error ? <p className="tiny-copy">{progress.error}</p> : null}
                   </div>
                   <div className="stat-col">
                     <p>{progress.total ? `${progress.processed}/${progress.total}` : progress.processed} processed</p>
