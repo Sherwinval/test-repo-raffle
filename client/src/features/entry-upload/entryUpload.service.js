@@ -47,14 +47,15 @@ export const validateEntryUpload = async ({ eventId, file }) => {
   return { status: 'ready', payload: await res.json() };
 };
 
-export const uploadEntries = async ({ eventId, file, duplicateMode }) => {
+export const uploadEntries = async ({ eventId, file, duplicateMode, signal }) => {
   const formData = new FormData();
   formData.append('file', file);
   if (duplicateMode) formData.append('duplicateMode', duplicateMode);
 
   const res = await fetch(`/api/events/${eventId}/entries/upload`, {
     method: 'POST',
-    body: formData
+    body: formData,
+    signal
   });
 
   if (res.status === 409) {
@@ -67,6 +68,15 @@ export const uploadEntries = async ({ eventId, file, duplicateMode }) => {
   }
 
   return { status: 'accepted', payload: await res.json() };
+};
+
+export const cancelUpload = async (uploadId) => {
+  const res = await fetch(`/api/upload/cancel/${uploadId}`, { method: 'POST' });
+  const body = await res.json();
+  if (!res.ok) {
+    throw new Error(body?.error || 'Failed to cancel upload.');
+  }
+  return body;
 };
 
 export const fetchUploadProgress = async (uploadId) => {

@@ -145,6 +145,36 @@ app.get('/api/upload/progress/:uploadId', (req, res) => {
   res.json(progress);
 });
 
+app.post('/api/upload/cancel/:uploadId', async (req, res) => {
+  const uploadId = req.params.uploadId;
+  const progress = progressMap.get(uploadId);
+
+  if (!progress) {
+    return res.status(404).json({ error: 'Upload ID not found.' });
+  }
+
+  if (progress.status === 'done') {
+    return res.status(409).json({ error: 'Upload already completed and cannot be canceled.' });
+  }
+
+  if (progress.status === 'canceled') {
+    return res.json(progress);
+  }
+
+  const canceledProgress = {
+    ...progress,
+    status: 'canceled',
+    cancelRequested: true,
+    processed: progress.processed ?? 0,
+    inserted: 0
+  };
+  progressMap.set(uploadId, canceledProgress);
+
+  await cleanupCanceledEntryUpload(uploadId);
+
+  res.json(progressMap.get(uploadId));
+});
+
 app.get('/api/participants/stats', async (_req, res) => {
   try {
     const count = await prisma.participant.count();
@@ -270,6 +300,7 @@ app.post('/api/events/:eventId/entries/upload', upload.single('file'), async (re
 
   progressMap.set(uploadId, {
     status: 'pending',
+    batchId: batch.id,
     total: rows.length,
     processed: 0,
     inserted: 0,
@@ -563,6 +594,11 @@ async function processEntryUpload(uploadId, batchId, eventId, rowsToInsert, erro
   let insertedTotal = 0;
 
   for (let start = 0; start < rowsToInsert.length; start += chunkSize) {
+    if (isUploadCanceled(uploadId)) {
+      await cleanupCanceledEntryUpload(uploadId);
+      return;
+    }
+
     const chunk = rowsToInsert.slice(start, start + chunkSize);
     const mapped = chunk.map((row) => ({
       id: randomUUID(),
@@ -575,9 +611,20 @@ async function processEntryUpload(uploadId, batchId, eventId, rowsToInsert, erro
       entryCode: row.entryCode
     }));
     const result = await prisma.entry.createMany({ data: mapped, skipDuplicates: true });
+
+    if (isUploadCanceled(uploadId)) {
+      await cleanupCanceledEntryUpload(uploadId);
+      return;
+    }
+
     insertedTotal += result.count ?? 0;
     progress.processed = start + chunk.length;
     progress.inserted = insertedTotal;
+  }
+
+  if (isUploadCanceled(uploadId)) {
+    await cleanupCanceledEntryUpload(uploadId);
+    return;
   }
 
   const skippedRows = totalFileRows - errorRows.length - insertedTotal;
@@ -596,6 +643,32 @@ async function processEntryUpload(uploadId, batchId, eventId, rowsToInsert, erro
       errors: errorRows.length > 0 ? errorRows : undefined
     }
   });
+}
+
+function isUploadCanceled(uploadId) {
+  const progress = progressMap.get(uploadId);
+  return progress?.status === 'canceled' || progress?.cancelRequested === true;
+}
+
+async function cleanupCanceledEntryUpload(uploadId) {
+  const progress = progressMap.get(uploadId);
+  if (!progress?.batchId) return;
+
+  await prisma.entry.deleteMany({ where: { uploadBatchId: progress.batchId } });
+  await prisma.uploadBatch.update({
+    where: { id: progress.batchId },
+    data: {
+      status: 'canceled',
+      insertedRows: 0,
+      skippedRows: progress.total ?? 0,
+      errors: progress.errors?.length > 0 ? progress.errors : undefined
+    }
+  });
+
+  progress.status = 'canceled';
+  progress.cancelRequested = true;
+  progress.inserted = 0;
+  progressMap.set(uploadId, progress);
 }
 
 function findEntryIncompleteRows(rows) {

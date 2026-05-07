@@ -155,6 +155,19 @@ body {
   box-shadow: 0 14px 28px rgba(12, 74, 110, 0.34);
 }
 
+.btn-danger {
+  border: none;
+  background: #be123c;
+  box-shadow: 0 8px 20px rgba(190, 18, 60, 0.22);
+  transition: transform 180ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+
+.btn-danger:hover {
+  background: #9f1239;
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(190, 18, 60, 0.28);
+}
+
 .action-btn {
   align-self: end;
   border: none;
@@ -715,6 +728,11 @@ body {
 .upload-progress-card--error {
   border-color: #fecdd3;
   background: #fff1f2;
+}
+
+.upload-progress-card--canceled {
+  border-color: #fde68a;
+  background: #fffbeb;
 }
 
 .stage-track {
