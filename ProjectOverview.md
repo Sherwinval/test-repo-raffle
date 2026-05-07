@@ -1,7 +1,8 @@
 # Internal Raffle System — Project Overview
 
 ## Problem
-Existing tools cannot handle more than 20,000 entries and provide no control over branding, event management, or audit records.
+
+Existing tools cannot handle more than 20,000 entries and provide no control over branding, event management, or audit records. The problem is also to ensure that the employee details are SECURELY stored inside a database
 
 **Objective:** Build a scalable, internal raffle system to replace third-party tools and support recurring HR-led events.
 
@@ -16,8 +17,27 @@ Existing tools cannot handle more than 20,000 entries and provide no control ove
 ---
 
 ## Users
-- Internal HR / People Ops team
-- Role-based access: `operator` and `admin`
+
+Internal HR / People Ops team. Two roles: `Admin` and `Event Manager`.
+
+### Admin
+- Full system access
+- Invite/revoke users (Admins and Event Managers)
+- Create/manage events; view all events across the system
+- Run all operational tasks: upload, draw, present, export
+- View audit log; access system settings
+
+### Event Manager
+- Create and manage their own events (full CRUD)
+- Run all operational tasks for owned + co-assigned events (upload, draw, present, export)
+- Add other Event Managers as collaborators on their own events
+- Cannot manage users or access system settings
+
+### Account Creation
+- **No public signup.** Accounts exist only via invite from an Admin.
+- First Admin bootstrapped via one-time CLI script (`npm run seed:first-admin`).
+- System enforces ≥ 2 active Admins for continuity.
+
 
 ---
 
@@ -52,14 +72,19 @@ Existing tools cannot handle more than 20,000 entries and provide no control ove
 ### 1. Event Management
 Create, configure, and manage raffle events with prize categories and draw rules.
 
-### 2. Role & Access Control
-Admin vs operator permissions scoped per event.
+### 2. Authentication & Role Access Control
+JWT-based authentication with a 2-role model (Admin / Event Manager). No public signup —
+all accounts are created via an Admin-issued invite token flow: email-bound, SHA-256 hashed,
+one-time use, 24–48h expiry. First Admin is bootstrapped via a one-time CLI seed script
+(`npm run seed:first-admin`); the system enforces a minimum of 2 active Admins for continuity.
+Authorization is two-layered: role check (Admin vs Event Manager) plus per-event access
+check (owner or assigned collaborator) for event-scoped operations.
 
 ### 3. Entry Upload ← *Current Focus*
 Bulk import participant data via CSV/Excel. Validates format, deduplicates, and stores 20,000+ entries with upload progress monitoring.
 
 ### 4. Draw Engine
-Randomized draw logic with prize category scoping and exclusion rules.
+Randomized draw logic with prize category scoping and exclusion rules. make sure that the randomized is secure and outside actions can't affect it like operating system changes.
 
 ### 5. Live Presentation
 Branded draw UI for live event display.
@@ -119,11 +144,80 @@ Post-draw result views and CSV/Excel export with full audit trail.
 - Must handle 20,000+ rows without timeout — use streaming or chunked processing
 - Duplicate `entryCode` within the same event must be rejected (not silently overwritten)
 - All uploads must be tied to a specific `eventId`
-- No auth implementation needed for this module — assume `operatorId` is available in request context
+- Endpoint protected by `protect({ role: 'EVENT_MANAGER', eventAccess: true })` middleware; `operatorId` derived from JWT
 
 
 ## Data Model (Prisma)
-Plan the schema for:
+
+### Entry Upload
 - `Entry` model linked to an `Event`
 - Fields: `id`, `eventId`, `employeeId`, `fullName`, `department`, `email`, `entryCode` (unique per event), `createdAt`, `uploadBatchId`
 - `UploadBatch` model for tracking each upload job: `id`, `eventId`, `status`, `totalRows`, `insertedRows`, `skippedRows`, `errors (JSON)`, `createdAt`
+
+### Users & Authentication
+```prisma
+model User {
+  id               String    @id @default(uuid())
+  email            String    @unique
+  passwordHash     String?           // null until invite accepted
+  role             Role      @default(EVENT_MANAGER)
+  isActive         Boolean   @default(false)
+
+  // Invite tracking
+  inviteTokenHash  String?   @unique
+  inviteExpiresAt  DateTime?
+  invitedById      String?
+  invitedBy        User?     @relation("UserInvites", fields: [invitedById], references: [id])
+  invitedUsers     User[]    @relation("UserInvites")
+
+  // Event relationships
+  ownedEvents      Event[]   @relation("EventOwner")
+  assignments      EventAssignment[]
+
+  createdAt        DateTime  @default(now())
+}
+
+enum Role {
+  ADMIN
+  EVENT_MANAGER
+}
+
+model EventAssignment {
+  id        String   @id @default(uuid())
+  eventId   String
+  userId    String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, userId])
+}
+```
+
+> The `Event` model gains an `ownerId` field (FK to `User`) and an `assignments EventAssignment[]` relation.
+
+### API Endpoints
+
+#### Authentication
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| `POST` | `/api/auth/login` | Public | Email + password → JWT |
+| `POST` | `/api/auth/invite` | Admin | Invite user as Admin or Event Manager |
+| `GET` | `/api/auth/invite/:token` | Public | Validate token before showing accept form |
+| `POST` | `/api/auth/accept-invite` | Public | Token + email + password → activate account |
+| `DELETE` | `/api/auth/invite/:email` | Admin | Revoke a pending invite |
+
+#### User Management
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| `GET` | `/api/users` | Admin | List all users |
+| `PATCH` | `/api/users/:id/role` | Admin | Promote/demote (blocked if it leaves < 2 Admins) |
+| `DELETE` | `/api/users/:id` | Admin | Deactivate user (blocked if it leaves < 2 Admins) |
+
+#### Event Assignment
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| `POST` | `/api/events/:eventId/assignments` | Event owner or Admin | Add a collaborator |
+| `DELETE` | `/api/events/:eventId/assignments/:userId` | Event owner or Admin | Remove a collaborator |
+| `GET` | `/api/events/:eventId/assignments` | Anyone with event access | List collaborators |
+
