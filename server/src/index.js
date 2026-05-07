@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import { randomUUID } from 'crypto';
+import http from 'node:http';
 import dotenv from 'dotenv';
 import prisma from './prisma.js';
 import { parseFileBuffer } from './utils/parseFile.js';
@@ -16,6 +17,10 @@ const progressMap = new Map();
 
 app.use(cors());
 app.use(express.json());
+
+app.get('/api/health', (_req, res) => {
+  res.json({ ok: true });
+});
 
 app.post('/api/upload', upload.single('file'), async (req, res) => {
   const file = req.file;
@@ -345,9 +350,77 @@ app.get('/api/events/:eventId/entries', async (req, res) => {
   }
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`Server listening on http://localhost:${port}`);
 });
+
+server.on('error', async (error) => {
+  if (error.code !== 'EADDRINUSE') {
+    throw error;
+  }
+
+  if (await isExistingApiServerHealthy(port)) {
+    console.log(`Server is already running on http://localhost:${port}`);
+    process.exit(0);
+  }
+
+  console.error(
+    `Port ${port} is already in use. Stop the process using it, or run this server with another PORT and update the Vite proxy target.`
+  );
+  process.exit(1);
+});
+
+async function isExistingApiServerHealthy(portNumber) {
+  try {
+    const healthResponse = await requestLocalJson(portNumber, '/api/health');
+    if (healthResponse.statusCode >= 200 && healthResponse.statusCode < 300) {
+      return true;
+    }
+  } catch {
+    // Older running copies of this server do not have /api/health.
+  }
+
+  try {
+    const progressResponse = await requestLocalJson(portNumber, '/api/upload/progress/__probe__');
+    const contentType = progressResponse.headers['content-type'] || '';
+    if (progressResponse.statusCode === 404 && contentType.includes('application/json')) {
+      const body = JSON.parse(progressResponse.body || '{}');
+      return body?.error === 'Upload ID not found.';
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
+function requestLocalJson(portNumber, path) {
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        host: '127.0.0.1',
+        port: portNumber,
+        path,
+        method: 'GET',
+        timeout: 1500
+      },
+      (res) => {
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => {
+          body += chunk;
+        });
+        res.on('end', () => {
+          resolve({ statusCode: res.statusCode, headers: res.headers, body });
+        });
+      }
+    );
+
+    req.on('timeout', () => req.destroy(new Error('Request timed out.')));
+    req.on('error', reject);
+    req.end();
+  });
+}
 
 async function processUpload(uploadId, insertRows) {
   const progress = progressMap.get(uploadId);
