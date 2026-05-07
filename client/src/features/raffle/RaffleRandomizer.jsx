@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { SlotMachine } from './SlotMachine';
+import { OrbitDrawMachine } from './OrbitDrawMachine';
 import { drawWinner, mapEntryIds } from './raffle.logic';
 import { addWinnerForEvent, clearWinnersForEvent, fetchAllEventEntries, getWinnersForEvent } from './raffle.service';
 
@@ -13,6 +14,7 @@ export const RaffleRandomizer = ({ selectedEvent }) => {
   const [auditVisible, setAuditVisible] = useState(true);
   const [showWinnerPopup, setShowWinnerPopup] = useState(false);
   const [drawDurationSec, setDrawDurationSec] = useState(4);
+  const [raffleStyle, setRaffleStyle] = useState('classic');
 
   useEffect(() => {
     if (!selectedEvent?.id) return;
@@ -31,19 +33,12 @@ export const RaffleRandomizer = ({ selectedEvent }) => {
   }, [selectedEvent]);
 
   const excludedWinnerIds = useMemo(() => new Set(winners.map((w) => w.entry.id)), [winners]);
-  const eligibleEntries = useMemo(
-    () => entries.filter((entry) => !excludedWinnerIds.has(entry.id)),
-    [entries, excludedWinnerIds]
-  );
+  const eligibleEntries = useMemo(() => entries.filter((entry) => !excludedWinnerIds.has(entry.id)), [entries, excludedWinnerIds]);
   const eligibleIds = useMemo(() => mapEntryIds(eligibleEntries), [eligibleEntries]);
 
   const preselectWinner = () => {
     const result = drawWinner(entries, excludedWinnerIds);
-    const winnerLock = {
-      winner: result.winner,
-      fingerprint: result.fingerprint,
-      preselectedAt: new Date().toISOString()
-    };
+    const winnerLock = { winner: result.winner, fingerprint: result.fingerprint, preselectedAt: new Date().toISOString() };
 
     setPendingWinner(winnerLock);
     setSpinComplete(false);
@@ -113,64 +108,58 @@ export const RaffleRandomizer = ({ selectedEvent }) => {
 
         <div className="draw-duration-wrap">
           <label htmlFor="draw-duration" className="field-label">Draw Duration: {drawDurationSec}s</label>
-          <input
-            id="draw-duration"
-            type="range"
-            min="2"
-            max="12"
-            step="1"
-            value={drawDurationSec}
-            onChange={(e) => setDrawDurationSec(Number(e.target.value))}
-            disabled={isSpinning}
-            className="draw-duration-slider"
-          />
+          <input id="draw-duration" type="range" min="2" max="12" step="1" value={drawDurationSec} onChange={(e) => setDrawDurationSec(Number(e.target.value))} disabled={isSpinning} className="draw-duration-slider" />
         </div>
 
-        <SlotMachine
-          entries={eligibleIds}
-          winner={pendingWinner?.winner?.employeeId || eligibleIds[0] || '---'}
-          isSpinning={isSpinning}
-          onSpinComplete={handleSpinComplete}
-          reelCount={7}
-          visibleRows={5}
-          spinDurationMs={drawDurationSec * 1000}
-        />
+        <div className="draw-duration-wrap">
+          <label htmlFor="raffle-style" className="field-label">Raffle Style</label>
+          <select id="raffle-style" className="entries-filter" value={raffleStyle} onChange={(e) => setRaffleStyle(e.target.value)} disabled={isSpinning}>
+            <option value="classic">Classic Digit Slot</option>
+            <option value="orbit">Orbit Draw</option>
+          </select>
+        </div>
+
+        {raffleStyle === 'orbit' ? (
+          <OrbitDrawMachine
+            entries={eligibleIds}
+            winner={pendingWinner?.winner?.employeeId || eligibleIds[0] || '0000000'}
+            isSpinning={isSpinning}
+            onSpinComplete={handleSpinComplete}
+            spinDurationMs={drawDurationSec * 1000}
+          />
+        ) : (
+          <SlotMachine
+            entries={eligibleIds}
+            winner={pendingWinner?.winner?.employeeId || eligibleIds[0] || '---'}
+            isSpinning={isSpinning}
+            onSpinComplete={handleSpinComplete}
+            reelCount={7}
+            visibleRows={5}
+            spinDurationMs={drawDurationSec * 1000}
+          />
+        )}
 
         <div className="raffle-action-row">
-          <button type="button" className="btn-primary action-btn" onClick={preselectWinner} disabled={isSpinning || eligibleEntries.length === 0}>
-            SPIN
-          </button>
-          {spinComplete && pendingWinner && (
-            <button type="button" className="btn-primary action-btn claim-btn" onClick={confirmWinner}>
-              CLAIM / CONFIRM WINNER
-            </button>
-          )}
+          <button type="button" className="btn-primary action-btn" onClick={preselectWinner} disabled={isSpinning || eligibleEntries.length === 0}>SPIN</button>
+          {spinComplete && pendingWinner && <button type="button" className="btn-primary action-btn claim-btn" onClick={confirmWinner}>CLAIM / CONFIRM WINNER</button>}
           <button type="button" className="btn-ghost" onClick={onReset} disabled={isSpinning}>Reset Winners</button>
         </div>
 
         {pendingWinner && auditVisible && (
           <div className="audit-panel">
             <p className="card-subheading">Audit</p>
-            <p className="card-copy">
-              Winner pre-selected: <strong>{pendingWinner.winner.employeeId}</strong><br />
-              Draw fingerprint: <code>{pendingWinner.fingerprint}</code>
-            </p>
+            <p className="card-copy">Winner pre-selected: <strong>{pendingWinner.winner.employeeId}</strong><br />Draw fingerprint: <code>{pendingWinner.fingerprint}</code></p>
             <p className="tiny-copy">Preselected at: {new Date(pendingWinner.preselectedAt).toLocaleString()}</p>
           </div>
         )}
 
-        <button type="button" className="btn-ghost-sm audit-toggle" onClick={() => setAuditVisible((v) => !v)}>
-          {auditVisible ? 'Hide audit log' : 'Show audit log'}
-        </button>
-
+        <button type="button" className="btn-ghost-sm audit-toggle" onClick={() => setAuditVisible((v) => !v)}>{auditVisible ? 'Hide audit log' : 'Show audit log'}</button>
         {error && <div className="error-card raffle-error-card">{error}</div>}
       </div>
 
       <div className="soft-card raffle-history-card">
         <p className="card-heading">Winner History</p>
-        {winners.length === 0 ? (
-          <p className="tiny-copy">No winners drawn yet.</p>
-        ) : (
+        {winners.length === 0 ? <p className="tiny-copy">No winners drawn yet.</p> : (
           <ul className="winner-history">
             {winners.map((winner) => (
               <li key={`${winner.entry.id}-${winner.drawnAt}`}>
@@ -187,9 +176,7 @@ export const RaffleRandomizer = ({ selectedEvent }) => {
           <div className="winner-popup" onClick={(e) => e.stopPropagation()}>
             <p className="winner-popup-title">You win, {pendingWinner.winner.fullName}!</p>
             <p className="tiny-copy">Employee ID: {pendingWinner.winner.employeeId}</p>
-            <button type="button" className="btn-primary action-btn" onClick={() => setShowWinnerPopup(false)}>
-              Nice!
-            </button>
+            <button type="button" className="btn-primary action-btn" onClick={() => setShowWinnerPopup(false)}>Nice!</button>
           </div>
         </div>
       )}

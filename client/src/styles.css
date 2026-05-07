@@ -1253,3 +1253,120 @@ body {
   margin-top: 0.35rem;
   accent-color: #0891b2;
 }
+.hv-slot-machine {
+  margin: 1rem 0 0.75rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: linear-gradient(160deg, #0f172a, #111827);
+  padding: 0.9rem;
+}
+
+.hv-slot-header {
+  color: #cbd5e1;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 0.55rem;
+}
+
+.hv-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.45rem;
+}
+
+.hv-slot-cell {
+  height: 3rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(148, 163, 184, 0.38);
+  background: #020617;
+  color: #e2e8f0;
+  font-family: 'Menlo', 'Consolas', monospace;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.hv-slot-cell--spin {
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.3);
+}
+.orbit-machine {
+  margin: 1rem 0 0.75rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: radial-gradient(circle at center, #0f172a, #020617 65%);
+  padding: 1rem;
+  display: grid;
+  place-items: center;
+}
+
+.orbit-ring {
+  position: relative;
+  width: 22rem;
+  height: 22rem;
+  border-radius: 999px;
+  border: 1px dashed rgba(148, 163, 184, 0.45);
+}
+
+.orbit-node {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: center center;
+}
+
+.orbit-node span {
+  display: inline-grid;
+  place-items: center;
+  min-width: 3.8rem;
+  height: 2rem;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.9);
+  color: #e2e8f0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  transform: translate(-50%, -50%);
+}
+
+.orbit-center {
+  margin-top: -12rem;
+  width: 9.5rem;
+  height: 9.5rem;
+  border-radius: 999px;
+  border: 2px solid rgba(34, 197, 94, 0.6);
+  background: radial-gradient(circle at top, rgba(34, 197, 94, 0.22), rgba(15, 23, 42, 0.95));
+  box-shadow: 0 0 24px rgba(34, 197, 94, 0.35);
+  color: #f8fafc;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 0.6rem;
+}
+
+.orbit-center strong {
+  font-family: 'Menlo', 'Consolas', monospace;
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+}
+
+@media (max-width: 768px) {
+  .orbit-ring {
+    width: 16.5rem;
+    height: 16.5rem;
+  }
+
+  .orbit-center {
+    margin-top: -9.2rem;
+    width: 7.5rem;
+    height: 7.5rem;
+  }
+
+  .orbit-node span {
+    min-width: 3rem;
+    height: 1.8rem;
+    font-size: 0.66rem;
+  }
+}
