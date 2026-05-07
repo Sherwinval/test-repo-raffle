@@ -1,0 +1,192 @@
+:root {
+  font-family: 'Segoe UI', sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #f5f7fb;
+  color: #0f172a;
+}
+
+.app-shell {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.tab-nav {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tab-btn {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.tab-btn--active {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #fff;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+
+.feature-shell {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.error-text {
+  color: #be123c;
+}
+
+.event-list {
+  display: grid;
+  gap: 8px;
+}
+
+.event-item-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pill,
+.active-pill {
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  padding: 6px 10px;
+}
+
+.active-pill {
+  border-color: #0369a1;
+  background: #e0f2fe;
+}
+
+.simple-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.simple-table th,
+.simple-table td {
+  border: 1px solid #e2e8f0;
+  padding: 8px;
+  text-align: left;
+}
+
+.modal {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #f59e0b;
+  background: #fffbeb;
+  border-radius: 8px;
+}
+
+.slot-machine {
+  position: relative;
+  margin: 16px 0;
+  padding: 14px;
+  background: radial-gradient(circle at 50% 0%, #1f2937, #111827 55%, #030712);
+  border-radius: 12px;
+  border: 1px solid #334155;
+  overflow: hidden;
+}
+
+.slot-machine-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  position: relative;
+  z-index: 2;
+}
+
+.slot-reel {
+  background: #0b1220;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.slot-cell {
+  height: 42px;
+  display: grid;
+  place-items: center;
+  color: #cbd5e1;
+  font-family: 'Consolas', monospace;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.slot-cell--center {
+  color: #f8fafc;
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.2), rgba(22, 163, 74, 0.3));
+  box-shadow: inset 0 0 0 1px rgba(74, 222, 128, 0.6);
+  font-weight: 700;
+}
+
+.slot-machine-mask {
+  position: absolute;
+  inset: 14px;
+  pointer-events: none;
+  z-index: 3;
+  background: linear-gradient(
+    180deg,
+    rgba(3, 7, 18, 0.75) 0%,
+    rgba(3, 7, 18, 0) 24%,
+    rgba(3, 7, 18, 0) 72%,
+    rgba(3, 7, 18, 0.75) 100%
+  );
+}
+
+.slot-machine-result-line {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: calc(14px + 84px);
+  height: 42px;
+  border: 1px solid rgba(96, 165, 250, 0.7);
+  box-shadow: 0 0 14px rgba(96, 165, 250, 0.45);
+  border-radius: 8px;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.claim-btn {
+  background: #16a34a;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-weight: 700;
+}
+
+.audit-panel {
+  margin-top: 10px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.audit-toggle {
+  margin-top: 8px;
+}
+
+.winner-history {
+  margin-top: 10px;
+  padding-left: 18px;
+}
