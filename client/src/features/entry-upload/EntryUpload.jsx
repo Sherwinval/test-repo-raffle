@@ -6,7 +6,7 @@ import UploadProgress from '@/components/UploadProgress';
 import UploadSummary from '@/components/UploadSummary';
 import EntriesTable from '@/components/EntriesTable';
 import { getProgressPercent, validateEntryUploadSelection } from './entryUpload.logic';
-import { fetchEntryStats, fetchUploadProgress, uploadEntries } from './entryUpload.service';
+import { cancelUpload, fetchEntryStats, fetchUploadProgress, uploadEntries } from './entryUpload.service';
 
 export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEvent }) => {
   const [file, setFile] = useState(null);
@@ -16,10 +16,14 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
   const [displayProgress, setDisplayProgress] = useState(0);
   const [duplicateModal, setDuplicateModal] = useState(null);
   const [entryCount, setEntryCount] = useState(null);
+  const [isSubmittingUpload, setIsSubmittingUpload] = useState(false);
   const [tableRefreshKey, setTableRefreshKey] = useState(0);
   const fileInputRef = useRef(null);
+  const uploadAbortRef = useRef(null);
+  const uploadIdRef = useRef(null);
 
   const progressPercentage = useMemo(() => getProgressPercent(progress), [progress]);
+  const isUploading = isSubmittingUpload || Boolean(uploadId);
 
   useEffect(() => {
     let timerId = window.setInterval(() => {
@@ -36,13 +40,17 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
   }, [progressPercentage]);
 
   useEffect(() => {
+    uploadIdRef.current = uploadId;
+  }, [uploadId]);
+
+  useEffect(() => {
     if (!uploadId) return;
     const intervalId = window.setInterval(async () => {
       try {
         const data = await fetchUploadProgress(uploadId);
         setProgress(data);
         if (data.status === 'error' && data.error) setError(data.error);
-        if (data.status === 'done' || data.status === 'error') {
+        if (data.status === 'done' || data.status === 'error' || data.status === 'canceled') {
           window.clearInterval(intervalId);
           setUploadId(null);
           setFile(null);
@@ -85,8 +93,17 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
       setDisplayProgress(0);
     }
 
+    const abortController = new AbortController();
+    uploadAbortRef.current = abortController;
+    setIsSubmittingUpload(true);
+
     try {
-      const result = await uploadEntries({ eventId: selectedEvent.id, file, duplicateMode });
+      const result = await uploadEntries({
+        eventId: selectedEvent.id,
+        file,
+        duplicateMode,
+        signal: abortController.signal
+      });
       if (result.status === 'duplicate-confirmation') {
         const body = result.payload;
         setDuplicateModal({
@@ -99,7 +116,50 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
       }
       setUploadId(result.payload.uploadId);
     } catch (err) {
-      setError(err.message || 'Upload failed.');
+      if (err.name === 'AbortError') {
+        setProgress({ status: 'canceled', total: 0, processed: 0, inserted: 0 });
+        setError(null);
+      } else {
+        setError(err.message || 'Upload failed.');
+      }
+    } finally {
+      if (uploadAbortRef.current === abortController) uploadAbortRef.current = null;
+      setIsSubmittingUpload(false);
+    }
+  };
+
+  const handleCancelUpload = async () => {
+    uploadAbortRef.current?.abort();
+
+    const currentUploadId = uploadIdRef.current;
+    if (!currentUploadId) {
+      setProgress({ status: 'canceled', total: 0, processed: 0, inserted: 0 });
+      setUploadId(null);
+      setIsSubmittingUpload(false);
+      setFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    setProgress((current) => ({
+      ...(current ?? { total: 0, processed: 0, inserted: 0 }),
+      status: 'canceling'
+    }));
+
+    try {
+      const canceledProgress = await cancelUpload(currentUploadId);
+      setProgress(canceledProgress);
+      setError(null);
+      setUploadId(null);
+      setFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (selectedEvent) {
+        const stats = await fetchEntryStats(selectedEvent.id);
+        setEntryCount(stats.totalEntries);
+      }
+      setTableRefreshKey((k) => k + 1);
+    } catch (err) {
+      setError(err.message || 'Failed to cancel upload.');
     }
   };
 
@@ -134,9 +194,10 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
             setFile={setFile}
             fileInputRef={fileInputRef}
             onUpload={() => handleUpload(null)}
-            uploading={Boolean(uploadId)}
+            uploading={isUploading}
             setError={setError}
             onRemoveFile={() => { setFile(null); setError(null); }}
+            onCancelUpload={handleCancelUpload}
           />
 
           <div className="status-stack">

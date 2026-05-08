@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 const ACCEPTED_EXTENSIONS = ['csv', 'xls', 'xlsx'];
 
-export default function UploadZone({ file, setFile, fileInputRef, onUpload, uploading, setError, onRemoveFile }) {
+export default function UploadZone({ file, setFile, fileInputRef, onUpload, uploading, setError, onRemoveFile, onCancelUpload }) {
   const [dragging, setDragging] = useState(false);
 
   function validateAndSetFile(f) {
@@ -90,8 +90,17 @@ export default function UploadZone({ file, setFile, fileInputRef, onUpload, uplo
           onClick={onUpload}
           disabled={!file || uploading}
         >
-          {uploading ? 'Uploading…' : 'Start upload'}
+          {uploading ? 'Uploading...' : 'Start upload'}
         </button>
+        {uploading && (
+          <button
+            type="button"
+            className="btn-danger action-btn"
+            onClick={onCancelUpload}
+          >
+            Cancel upload
+          </button>
+        )}
       </div>
     </div>
   );
