@@ -11,3 +11,4 @@ coverage/
 **/.parcel-cache/
 **/dist/
 **/.cache/
+.claude
