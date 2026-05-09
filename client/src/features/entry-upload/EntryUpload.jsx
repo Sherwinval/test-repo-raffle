@@ -8,7 +8,7 @@ import EntriesTable from '@/components/EntriesTable';
 import { getProgressPercent, validateEntryUploadSelection } from './entryUpload.logic';
 import { cancelUpload, fetchEntryStats, fetchUploadProgress, uploadEntries } from './entryUpload.service';
 
-export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEvent }) => {
+export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEvent, onStatsChange }) => {
   const [file, setFile] = useState(null);
   const [uploadId, setUploadId] = useState(null);
   const [progress, setProgress] = useState(null);
@@ -67,6 +67,12 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
     }, 1000);
     return () => window.clearInterval(intervalId);
   }, [uploadId, selectedEvent]);
+
+  useEffect(() => {
+    if (onStatsChange) {
+      onStatsChange({ entryCount: entryCount ?? 0 });
+    }
+  }, [entryCount, onStatsChange]);
 
   useEffect(() => {
     if (selectedEvent) {

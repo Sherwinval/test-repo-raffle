@@ -26,12 +26,19 @@ export default function UploadProgress({ progress, displayProgress }) {
           <p className="card-heading">Upload status</p>
           <div className="stage-track">
             {STAGES.map((s, i) => (
+              (() => {
+                const complete = i < stageIndex || isDone;
+                const active = s === stage && !isDone;
+                const className = `stage-dot${complete ? ' stage-dot--done' : ''}${active ? ' stage-dot--active' : ''}`;
+                return (
               <span
                 key={s}
-                className={`stage-dot${i < stageIndex || isDone ? ' stage-dot--done' : ''}${s === stage && !isDone ? ' stage-dot--active' : ''}`}
+                className={className}
               >
                 {s}
               </span>
+                );
+              })()
             ))}
           </div>
           {isError && progress.error && (

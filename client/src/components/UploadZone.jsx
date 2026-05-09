@@ -55,7 +55,7 @@ export default function UploadZone({ file, setFile, fileInputRef, onUpload, uplo
         />
         {file ? (
           <div className="drop-zone-file">
-            <span className="drop-zone-icon">📄</span>
+            <span className="drop-zone-icon">FILE</span>
             <span className="drop-zone-filename">{file.name}</span>
             <span className="drop-zone-size">{(file.size / 1024).toFixed(1)} KB</span>
             <button
@@ -68,20 +68,21 @@ export default function UploadZone({ file, setFile, fileInputRef, onUpload, uplo
                 onRemoveFile();
               }}
             >
-              ✕
+              Remove
             </button>
           </div>
         ) : (
           <div className="drop-zone-prompt">
-            <span className="drop-zone-icon">⬆</span>
-            <span className="drop-zone-label">Drag & drop or click to browse</span>
-            <span className="tiny-copy">CSV, XLS, or XLSX · max 10 MB</span>
+            <span className="drop-zone-icon">UPLOAD</span>
+            <span className="drop-zone-label">Drag and drop your CSV here</span>
+            <span className="tiny-copy">CSV, XLS, or XLSX - max 10 MB</span>
+            <button type="button" className="btn-ghost browse-btn">Browse file</button>
           </div>
         )}
       </div>
 
       <div className="upload-actions">
-        <button type="button" className="btn-ghost" onClick={downloadTemplate}>
+        <button type="button" className="btn-ghost action-btn" onClick={downloadTemplate}>
           Download template
         </button>
         <button
@@ -95,7 +96,7 @@ export default function UploadZone({ file, setFile, fileInputRef, onUpload, uplo
         {uploading && (
           <button
             type="button"
-            className="btn-danger action-btn"
+            className="btn-ghost action-btn"
             onClick={onCancelUpload}
           >
             Cancel upload

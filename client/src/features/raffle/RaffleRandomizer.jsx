@@ -4,7 +4,7 @@ import { OrbitDrawMachine } from './OrbitDrawMachine';
 import { drawWinner, mapEntryIds } from './raffle.logic';
 import { addWinnerForEvent, clearWinnersForEvent, fetchAllEventEntries, getWinnersForEvent } from './raffle.service';
 
-export const RaffleRandomizer = ({ selectedEvent }) => {
+export const RaffleRandomizer = ({ selectedEvent, onStatsChange }) => {
   const [entries, setEntries] = useState([]);
   const [winners, setWinners] = useState([]);
   const [error, setError] = useState('');
@@ -35,6 +35,12 @@ export const RaffleRandomizer = ({ selectedEvent }) => {
   const excludedWinnerIds = useMemo(() => new Set(winners.map((w) => w.entry.id)), [winners]);
   const eligibleEntries = useMemo(() => entries.filter((entry) => !excludedWinnerIds.has(entry.id)), [entries, excludedWinnerIds]);
   const eligibleIds = useMemo(() => mapEntryIds(eligibleEntries), [eligibleEntries]);
+
+  useEffect(() => {
+    if (onStatsChange) {
+      onStatsChange({ total: entries.length, eligible: eligibleEntries.length, drawn: winners.length });
+    }
+  }, [entries.length, eligibleEntries.length, winners.length, onStatsChange]);
 
   const preselectWinner = () => {
     const result = drawWinner(entries, excludedWinnerIds);
@@ -101,14 +107,14 @@ export const RaffleRandomizer = ({ selectedEvent }) => {
         </div>
 
         <div className="raffle-stats-row">
-          <span className="pill">Total: {entries.length}</span>
-          <span className="pill">Eligible: {eligibleEntries.length}</span>
-          <span className="pill">Drawn: {winners.length}</span>
+          <span className="pill pill--neutral">👤 Total: {entries.length}</span>
+          <span className="pill pill--accent">✔ Eligible: {eligibleEntries.length}</span>
+          <span className="pill pill--success">🏆 Drawn: {winners.length}</span>
         </div>
 
         <div className="draw-duration-wrap">
           <label htmlFor="draw-duration" className="field-label">Draw Duration: {drawDurationSec}s</label>
-          <input id="draw-duration" type="range" min="2" max="12" step="1" value={drawDurationSec} onChange={(e) => setDrawDurationSec(Number(e.target.value))} disabled={isSpinning} className="draw-duration-slider" />
+          <input id="draw-duration" type="range" min="2" max="12" step="1" value={drawDurationSec} onChange={(e) => setDrawDurationSec(Number(e.target.value))} disabled={isSpinning} className="draw-duration-slider" style={{ '--slider-percent': `${((drawDurationSec - 2) / 10) * 100}%` }} />
         </div>
 
         <div className="draw-duration-wrap">
@@ -140,7 +146,7 @@ export const RaffleRandomizer = ({ selectedEvent }) => {
         )}
 
         <div className="raffle-action-row">
-          <button type="button" className="btn-primary action-btn" onClick={preselectWinner} disabled={isSpinning || eligibleEntries.length === 0}>SPIN</button>
+          <button type="button" className="btn-primary action-btn spin-btn" onClick={preselectWinner} disabled={isSpinning || eligibleEntries.length === 0}>SPIN</button>
           {spinComplete && pendingWinner && <button type="button" className="btn-primary action-btn claim-btn" onClick={confirmWinner}>CLAIM / CONFIRM WINNER</button>}
           <button type="button" className="btn-ghost" onClick={onReset} disabled={isSpinning}>Reset Winners</button>
         </div>
@@ -153,13 +159,13 @@ export const RaffleRandomizer = ({ selectedEvent }) => {
           </div>
         )}
 
-        <button type="button" className="btn-ghost-sm audit-toggle" onClick={() => setAuditVisible((v) => !v)}>{auditVisible ? 'Hide audit log' : 'Show audit log'}</button>
+        <button type="button" className="btn-ghost audit-toggle-btn" onClick={() => setAuditVisible((v) => !v)}>{auditVisible ? 'Hide audit log' : 'Show audit log'}</button>
         {error && <div className="error-card raffle-error-card">{error}</div>}
       </div>
 
       <div className="soft-card raffle-history-card">
         <p className="card-heading">Winner History</p>
-        {winners.length === 0 ? <p className="tiny-copy">No winners drawn yet.</p> : (
+        {winners.length === 0 ? <p className="tiny-copy winner-empty">🏆 No winners drawn yet. Run your first draw to see results here.</p> : (
           <ul className="winner-history">
             {winners.map((winner) => (
               <li key={`${winner.entry.id}-${winner.drawnAt}`}>
