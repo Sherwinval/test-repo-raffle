@@ -7,24 +7,60 @@ import { RaffleRandomizer } from '@/features/raffle/RaffleRandomizer';
 export const App = () => {
   const [activeTab, setActiveTab] = useState(TAB_IDS.ENTRY_UPLOAD);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const isUploadTab = activeTab === TAB_IDS.ENTRY_UPLOAD;
+  const isRaffleTab = activeTab === TAB_IDS.RAFFLE;
 
   return (
-    <div className="page-shell app-root">
-      <div className="app-container">
-        <div className="hero-card">
-          <div className="badge-row">
-            <span className="pill">Raffle Management</span>
-            <span className="pill">Upload + Draw</span>
+    <div className="dashboard-shell app-root">
+      <aside className="dashboard-sidebar">
+        <div className="brand-block">
+          <div className="brand-icon">R</div>
+          <div>
+            <p className="brand-title">Raffle System</p>
+            <p className="brand-subtitle">Internal Tool</p>
           </div>
+        </div>
+        <p className="sidebar-label">Navigation</p>
+        <button type="button" className={`sidebar-link${isUploadTab ? ' sidebar-link--active' : ''}`} onClick={() => setActiveTab(TAB_IDS.ENTRY_UPLOAD)}>
+          Event Dashboard
+        </button>
+        <button type="button" className={`sidebar-link${isRaffleTab ? ' sidebar-link--active' : ''}`} onClick={() => setActiveTab(TAB_IDS.RAFFLE)}>
+          Raffle Draw
+        </button>
+      </aside>
 
-          <h1 className="title">Raffle Entry Upload</h1>
-          <p className="subtitle">
-            Select an event, import entries from CSV or Excel, then run a slot-machine style raffle draw with crypto-locked winners.
-          </p>
+      <main className="dashboard-main">
+        <header className="dashboard-header">
+          <div>
+            <h1 className="title">{isUploadTab ? 'Event Dashboard' : 'Raffle Console'}</h1>
+            <p className="subtitle">
+              {isUploadTab
+                ? 'Manage events, upload participants, and monitor raffle readiness.'
+                : 'Run secure draws, track winners, and manage raffle outcomes.'}
+            </p>
+          </div>
+          <span className="status-chip">{selectedEvent ? 'Event selected' : 'No event selected'}</span>
+        </header>
 
+        <section className="kpi-grid">
+          <article className="kpi-card">
+            <p className="kpi-label">Tool Section</p>
+            <p className="kpi-value">{isUploadTab ? 'Upload' : 'Raffle'}</p>
+          </article>
+          <article className="kpi-card">
+            <p className="kpi-label">Current Event</p>
+            <p className="kpi-value kpi-value--sm">{selectedEvent?.name || 'Not selected'}</p>
+          </article>
+          <article className="kpi-card">
+            <p className="kpi-label">Workflow</p>
+            <p className="kpi-value">Active</p>
+          </article>
+        </section>
+
+        <section className="dashboard-panel">
           <TabNavigator activeTabId={activeTab} onTabChange={setActiveTab} />
 
-          <section hidden={activeTab !== TAB_IDS.ENTRY_UPLOAD}>
+          <section hidden={!isUploadTab}>
             <EntryUpload
               selectedEvent={selectedEvent}
               onSelectEvent={setSelectedEvent}
@@ -32,11 +68,11 @@ export const App = () => {
             />
           </section>
 
-          <section hidden={activeTab !== TAB_IDS.RAFFLE}>
+          <section hidden={!isRaffleTab}>
             <RaffleRandomizer selectedEvent={selectedEvent} />
           </section>
-        </div>
-      </div>
+        </section>
+      </main>
     </div>
   );
 };
