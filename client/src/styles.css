@@ -24,9 +24,11 @@ html {
 
 body {
   margin: 0;
-  font-family: 'Segoe UI', 'Avenir Next', sans-serif;
+  font-family: 'Inter', 'Segoe UI', 'Avenir Next', sans-serif;
   background: var(--bg);
   color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .dashboard-shell {
@@ -2243,4 +2245,282 @@ body,
   .manual-span-2 {
     grid-column: auto;
   }
+}
+
+/* ── Professional Enhancement Layer ──────────────────── */
+
+/* Sidebar accent gradient line */
+.sidebar-accent-line {
+  height: 2px;
+  margin: 0 0.4rem 0.5rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ff8c00, #ff8c00 40%, transparent 100%);
+  opacity: 0.5;
+}
+
+/* Smooth button micro-animations */
+.btn-primary {
+  transition: background 180ms ease, transform 120ms ease, box-shadow 180ms ease;
+}
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(255, 140, 0, 0.3);
+}
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-ghost {
+  transition: background 160ms ease, border-color 160ms ease, transform 120ms ease, color 160ms ease;
+}
+.btn-ghost:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(255, 140, 0, 0.5);
+  color: #ff8c00;
+}
+
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Card hover glow */
+.kpi-card {
+  transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+}
+.kpi-card:hover {
+  border-color: rgba(255, 140, 0, 0.3);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 140, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+/* Modal entrance animation */
+@keyframes modal-entrance {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.dup-modal,
+.winner-popup {
+  animation: modal-entrance 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dup-modal-backdrop,
+.winner-popup-backdrop {
+  animation: fade-in 180ms ease;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Loading spinner */
+@keyframes spin-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.spin-icon {
+  animation: spin-rotate 1.2s linear infinite;
+}
+
+/* Progress bar glow */
+.progress-fill {
+  box-shadow: 0 0 10px rgba(255, 140, 0, 0.4), 0 0 4px rgba(255, 140, 0, 0.2);
+}
+
+/* Table row hover accent */
+.entries-table tbody tr {
+  transition: background 140ms ease;
+}
+.entries-table tbody tr:hover td:first-child {
+  box-shadow: inset 3px 0 0 #ff8c00;
+}
+
+/* Event item polish */
+.event-item {
+  transition: background 150ms ease, border-color 150ms ease, transform 120ms ease;
+}
+.event-item:hover {
+  transform: translateX(2px);
+}
+
+/* Event delete btn alignment with SVG */
+.event-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Search icon SVG positioning fix */
+.search-icon {
+  display: inline-flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+/* Drop zone enhanced drag state */
+.drop-zone--active {
+  border-color: #ff8c00;
+  background: rgba(255, 140, 0, 0.06);
+  box-shadow: 0 0 20px rgba(255, 140, 0, 0.1);
+}
+
+/* Drop zone hover animation */
+.drop-zone {
+  transition: border-color 200ms ease, background 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+}
+.drop-zone:hover {
+  transform: translateY(-1px);
+}
+
+/* Ghost sm button inline flex for icon + text */
+.btn-ghost-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* Sidebar link SVG icon alignment */
+.sidebar-link svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity 160ms ease;
+}
+.sidebar-link:hover svg,
+.sidebar-link--active svg {
+  opacity: 1;
+}
+
+/* Section divider refined */
+.section-divider {
+  border-top: 1px solid var(--line);
+  opacity: 0.5;
+}
+
+/* Summary card dark theme */
+.summary-card {
+  background: rgba(0, 200, 83, 0.06);
+  border-color: rgba(0, 200, 83, 0.25);
+}
+.summary-num {
+  color: #fff;
+}
+.summary-stat--success .summary-num {
+  color: #00c853;
+}
+.summary-stat--warn .summary-num {
+  color: #ffb65c;
+}
+.summary-stat--error .summary-num {
+  color: #ef5350;
+}
+
+/* Winner popup refined */
+.winner-popup {
+  text-align: center;
+  background: linear-gradient(145deg, #1a1d22, #161618);
+  border: 1px solid rgba(255, 140, 0, 0.4);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), 0 0 40px rgba(255, 140, 0, 0.12);
+}
+.winner-popup-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: #ff8c00;
+  font-size: 1.4rem;
+  font-weight: 800;
+}
+
+/* Audit panel dark */
+.audit-panel {
+  background: rgba(255, 140, 0, 0.06);
+  border-color: rgba(255, 140, 0, 0.2);
+  border-radius: 12px;
+}
+.audit-panel .card-subheading {
+  color: #ff8c00;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Brand logo subtle animation on load */
+.brand-logo {
+  animation: rise-in 400ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Status chip refined */
+.status-chip {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #bfc7d2;
+}
+
+/* KPI value animation */
+.kpi-value {
+  transition: color 200ms ease;
+}
+
+/* Error card icon accent */
+.error-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+/* Tab active indicator dot */
+.tab-btn--active {
+  position: relative;
+}
+.tab-btn--active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 16px;
+  height: 2px;
+  border-radius: 999px;
+  background: #ff8c00;
+}
+
+/* Winner history list refinement */
+.winner-history li {
+  color: #e5e7eb;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.winner-history li:last-child {
+  border-bottom: none;
+}
+
+/* Card heading icon alignment */
+.card-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }

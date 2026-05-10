@@ -212,19 +212,14 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
             )}
           </div>
 
-          <div className="entry-mode-toggle">
-            <div className="flex space-x-1 mb-4">
+          <div className="tab-wrap" style={{ marginTop: '0.75rem' }}>
               <button
                 type="button"
                 onClick={() => {
                   setEntryMode('upload');
-                  setError(null); // Clear any manual entry errors
+                  setError(null);
                 }}
-                className={`px-4 py-2 rounded-md text-sm font-medium ${
-                  entryMode === 'upload'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
+                className={`tab-btn${entryMode === 'upload' ? ' tab-btn--active' : ''}`}
               >
                 File Upload
               </button>
@@ -232,17 +227,12 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
                 type="button"
                 onClick={() => {
                   setEntryMode('manual');
-                  setError(null); // Clear any upload errors
+                  setError(null);
                 }}
-                className={`px-4 py-2 rounded-md text-sm font-medium ${
-                  entryMode === 'manual'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
+                className={`tab-btn${entryMode === 'manual' ? ' tab-btn--active' : ''}`}
               >
                 Manual Entry
               </button>
-            </div>
           </div>
 
           {entryMode === 'upload' ? (

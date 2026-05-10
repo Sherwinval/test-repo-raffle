@@ -4,6 +4,18 @@ import { OrbitDrawMachine } from './OrbitDrawMachine';
 import { drawWinner, mapEntryIds } from './raffle.logic';
 import { addWinnerForEvent, clearWinnersForEvent, fetchAllEventEntries, getWinnersForEvent } from './raffle.service';
 
+const IconTrophy = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#ff8c00', display: 'inline' }}>
+    <path d="M6 9H4.5a2.5 2.5 0 010-5H6"/><path d="M18 9h1.5a2.5 2.5 0 000-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 1012 0V2z"/>
+  </svg>
+);
+
+const IconStar = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="#ff8c00" stroke="#ff8c00" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline', verticalAlign: 'text-bottom' }}>
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+  </svg>
+);
+
 export const RaffleRandomizer = ({ selectedEvent, onStatsChange }) => {
   const [entries, setEntries] = useState([]);
   const [winners, setWinners] = useState([]);
@@ -164,7 +176,7 @@ export const RaffleRandomizer = ({ selectedEvent, onStatsChange }) => {
       </div>
 
       <div className="soft-card raffle-history-card">
-        <p className="card-heading">Winner History</p>
+        <p className="card-heading"><IconStar /> Winner History</p>
         {winners.length === 0 ? <p className="tiny-copy winner-empty">No winners drawn yet. Run your first draw to see results here.</p> : (
           <ul className="winner-history">
             {winners.map((winner) => (
@@ -180,7 +192,7 @@ export const RaffleRandomizer = ({ selectedEvent, onStatsChange }) => {
       {showWinnerPopup && pendingWinner && (
         <div className="winner-popup-backdrop" onClick={() => setShowWinnerPopup(false)}>
           <div className="winner-popup" onClick={(e) => e.stopPropagation()}>
-            <p className="winner-popup-title">You win, {pendingWinner.winner.fullName}!</p>
+            <p className="winner-popup-title"><IconTrophy /> You win, {pendingWinner.winner.fullName}!</p>
             <p className="tiny-copy">Employee ID: {pendingWinner.winner.employeeId}</p>
             <button type="button" className="btn-primary action-btn" onClick={() => setShowWinnerPopup(false)}>Close</button>
           </div>

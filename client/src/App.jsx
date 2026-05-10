@@ -4,6 +4,16 @@ import { TAB_IDS } from '@/constants/app.constants';
 import { EntryUpload } from '@/features/entry-upload/EntryUpload';
 import { RaffleRandomizer } from '@/features/raffle/RaffleRandomizer';
 
+const IconDashboard = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+);
+const IconRaffle = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 8l-4 4-4-4"/><path d="M12 12v6"/></svg>
+);
+const IconSettings = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+);
+
 export const App = () => {
   const [activeTab, setActiveTab] = useState(TAB_IDS.ENTRY_UPLOAD);
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -22,16 +32,20 @@ export const App = () => {
             <span className="brand-logo-hub">Hub</span>
           </p>
         </div>
+        <div className="sidebar-accent-line" />
         <p className="sidebar-label">Navigation</p>
         <button type="button" className={`sidebar-link${isUploadTab ? ' sidebar-link--active' : ''}`} onClick={() => setActiveTab(TAB_IDS.ENTRY_UPLOAD)}>
-          Event Dashboard
+          <IconDashboard />
+          <span>Event Dashboard</span>
         </button>
         <button type="button" className={`sidebar-link${isRaffleTab ? ' sidebar-link--active' : ''}`} onClick={() => setActiveTab(TAB_IDS.RAFFLE)}>
-          Raffle Draw
+          <IconRaffle />
+          <span>Raffle Draw</span>
         </button>
         <div className="sidebar-footer">
           <button type="button" className="sidebar-link">
-            Settings
+            <IconSettings />
+            <span>Settings</span>
           </button>
           <div className="sidebar-user">
             <span className="sidebar-user-avatar">RH</span>
