@@ -100,6 +100,90 @@ export async function uploadEntries(req, res) {
   res.status(202).json({ uploadId });
 }
 
+export async function createEntry(req, res) {
+  const { eventId } = req.params;
+  const {
+    employeeId: rawEmployeeId,
+    fullName: rawFullName,
+    department: rawDepartment,
+    email: rawEmail,
+    entryCode: rawEntryCode
+  } = req.body;
+
+  const employeeId = String(rawEmployeeId || '').trim();
+  const fullName = String(rawFullName || '').trim();
+  const department = String(rawDepartment || '').trim();
+  const email = String(rawEmail || '').trim();
+  const entryCode = String(rawEntryCode || '').trim();
+
+  // Validate required fields
+  if (!employeeId || !fullName || !department || !email || !entryCode) {
+    return res.status(400).json({ error: 'All fields are required: employeeId, fullName, department, email, entryCode.' });
+  }
+
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ error: 'Invalid email format.' });
+  }
+
+  try {
+    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) return res.status(404).json({ error: 'Event not found.' });
+
+    // Check for duplicates
+    const existing = await prisma.entry.findFirst({
+      where: {
+        eventId,
+        OR: [
+          { entryCode },
+          { employeeId },
+          { email }
+        ]
+      }
+    });
+
+    if (existing) {
+      const duplicateField = existing.entryCode === entryCode ? 'entryCode' :
+                            existing.employeeId === employeeId ? 'employeeId' : 'email';
+      return res.status(409).json({
+        error: `An entry with this ${duplicateField} already exists.`,
+        duplicateField
+      });
+    }
+
+    // Manual entries still require an upload batch because uploadBatchId is mandatory.
+    const manualBatch = await prisma.uploadBatch.create({
+      data: {
+        eventId,
+        status: 'completed',
+        totalRows: 1,
+        insertedRows: 1,
+        skippedRows: 0,
+        errors: []
+      }
+    });
+
+    // Create the entry
+    const entry = await prisma.entry.create({
+      data: {
+        eventId,
+        uploadBatchId: manualBatch.id,
+        employeeId,
+        fullName,
+        department,
+        email,
+        entryCode
+      }
+    });
+
+    res.status(201).json(entry);
+  } catch (err) {
+    console.error('Create entry failed:', err);
+    res.status(500).json({ error: 'Failed to create entry.' });
+  }
+}
+
 export async function getEntryStats(req, res) {
   const { eventId } = req.params;
   try {

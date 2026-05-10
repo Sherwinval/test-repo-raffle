@@ -103,3 +103,23 @@ export const fetchEntriesPage = async ({ eventId, page, pageSize, search = '', d
   if (!res.ok) throw new Error('Failed to fetch entries.');
   return res.json();
 };
+
+export const createEntry = async ({ eventId, employeeId, fullName, department, email, entryCode }) => {
+  const res = await fetch(`/api/events/${eventId}/entries`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ employeeId, fullName, department, email, entryCode })
+  });
+
+  if (res.status === 409) {
+    const body = await res.json();
+    throw new Error(body.error);
+  }
+
+  if (!res.ok) {
+    const body = await res.json();
+    throw new Error(body?.error || 'Failed to create entry.');
+  }
+
+  return res.json();
+};

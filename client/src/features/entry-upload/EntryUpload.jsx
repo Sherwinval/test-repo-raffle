@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import EventSelector from '@/components/EventSelector';
 import UploadZone from '@/components/UploadZone';
+import ManualEntryForm from '@/components/ManualEntryForm';
 import DuplicateModal from '@/components/DuplicateModal';
 import UploadProgress from '@/components/UploadProgress';
 import UploadSummary from '@/components/UploadSummary';
@@ -18,6 +19,7 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
   const [entryCount, setEntryCount] = useState(null);
   const [isSubmittingUpload, setIsSubmittingUpload] = useState(false);
   const [tableRefreshKey, setTableRefreshKey] = useState(0);
+  const [entryMode, setEntryMode] = useState('upload'); // 'upload' or 'manual'
   const fileInputRef = useRef(null);
   const uploadAbortRef = useRef(null);
   const uploadIdRef = useRef(null);
@@ -169,6 +171,21 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
     }
   };
 
+  const handleEntryCreated = () => {
+    setTableRefreshKey(prev => prev + 1);
+    // Refresh entry count
+    if (selectedEvent) {
+      fetchEntryStats(selectedEvent.id).then(stats => {
+        setEntryCount(stats.totalEntries);
+        onStatsChange?.(stats);
+      }).catch(() => {});
+    }
+  };
+
+  const handleManualEntryError = (errorMessage) => {
+    setError(errorMessage);
+  };
+
   return (
     <>
       <EventSelector
@@ -195,16 +212,57 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
             )}
           </div>
 
-          <UploadZone
-            file={file}
-            setFile={setFile}
-            fileInputRef={fileInputRef}
-            onUpload={() => handleUpload(null)}
-            uploading={isUploading}
-            setError={setError}
-            onRemoveFile={() => { setFile(null); setError(null); }}
-            onCancelUpload={handleCancelUpload}
-          />
+          <div className="entry-mode-toggle">
+            <div className="flex space-x-1 mb-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setEntryMode('upload');
+                  setError(null); // Clear any manual entry errors
+                }}
+                className={`px-4 py-2 rounded-md text-sm font-medium ${
+                  entryMode === 'upload'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                File Upload
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEntryMode('manual');
+                  setError(null); // Clear any upload errors
+                }}
+                className={`px-4 py-2 rounded-md text-sm font-medium ${
+                  entryMode === 'manual'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                Manual Entry
+              </button>
+            </div>
+          </div>
+
+          {entryMode === 'upload' ? (
+            <UploadZone
+              file={file}
+              setFile={setFile}
+              fileInputRef={fileInputRef}
+              onUpload={() => handleUpload(null)}
+              uploading={isUploading}
+              setError={setError}
+              onRemoveFile={() => { setFile(null); setError(null); }}
+              onCancelUpload={handleCancelUpload}
+            />
+          ) : (
+            <ManualEntryForm
+              eventId={selectedEvent.id}
+              onEntryCreated={handleEntryCreated}
+              onError={handleManualEntryError}
+            />
+          )}
 
           <div className="status-stack">
             {error && <div className="error-card">{error}</div>}
