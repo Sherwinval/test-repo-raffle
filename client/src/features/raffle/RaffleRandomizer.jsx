@@ -107,9 +107,9 @@ export const RaffleRandomizer = ({ selectedEvent, onStatsChange }) => {
         </div>
 
         <div className="raffle-stats-row">
-          <span className="pill pill--neutral">👤 Total: {entries.length}</span>
-          <span className="pill pill--accent">✔ Eligible: {eligibleEntries.length}</span>
-          <span className="pill pill--success">🏆 Drawn: {winners.length}</span>
+          <span className="pill pill--neutral">Total: {entries.length}</span>
+          <span className="pill pill--accent">Eligible: {eligibleEntries.length}</span>
+          <span className="pill pill--success">Drawn: {winners.length}</span>
         </div>
 
         <div className="draw-duration-wrap">
@@ -165,7 +165,7 @@ export const RaffleRandomizer = ({ selectedEvent, onStatsChange }) => {
 
       <div className="soft-card raffle-history-card">
         <p className="card-heading">Winner History</p>
-        {winners.length === 0 ? <p className="tiny-copy winner-empty">🏆 No winners drawn yet. Run your first draw to see results here.</p> : (
+        {winners.length === 0 ? <p className="tiny-copy winner-empty">No winners drawn yet. Run your first draw to see results here.</p> : (
           <ul className="winner-history">
             {winners.map((winner) => (
               <li key={`${winner.entry.id}-${winner.drawnAt}`}>
@@ -182,7 +182,7 @@ export const RaffleRandomizer = ({ selectedEvent, onStatsChange }) => {
           <div className="winner-popup" onClick={(e) => e.stopPropagation()}>
             <p className="winner-popup-title">You win, {pendingWinner.winner.fullName}!</p>
             <p className="tiny-copy">Employee ID: {pendingWinner.winner.employeeId}</p>
-            <button type="button" className="btn-primary action-btn" onClick={() => setShowWinnerPopup(false)}>Nice!</button>
+            <button type="button" className="btn-primary action-btn" onClick={() => setShowWinnerPopup(false)}>Close</button>
           </div>
         </div>
       )}

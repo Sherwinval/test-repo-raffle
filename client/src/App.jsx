@@ -24,16 +24,13 @@ export const App = () => {
         </div>
         <p className="sidebar-label">Navigation</p>
         <button type="button" className={`sidebar-link${isUploadTab ? ' sidebar-link--active' : ''}`} onClick={() => setActiveTab(TAB_IDS.ENTRY_UPLOAD)}>
-          <span className="sidebar-link-icon">▦</span>
           Event Dashboard
         </button>
         <button type="button" className={`sidebar-link${isRaffleTab ? ' sidebar-link--active' : ''}`} onClick={() => setActiveTab(TAB_IDS.RAFFLE)}>
-          <span className="sidebar-link-icon">🎟</span>
           Raffle Draw
         </button>
         <div className="sidebar-footer">
           <button type="button" className="sidebar-link">
-            <span className="sidebar-link-icon">⚙</span>
             Settings
           </button>
           <div className="sidebar-user">
@@ -62,7 +59,7 @@ export const App = () => {
         <section className="kpi-grid">
           <article className="kpi-card">
             <p className="kpi-label">Current Section</p>
-            <p className="kpi-value kpi-value--sm">{isUploadTab ? '📊 Event Dashboard' : '🎰 Raffle Console'}</p>
+            <p className="kpi-value kpi-value--sm">{isUploadTab ? 'Event Dashboard' : 'Raffle Console'}</p>
           </article>
           <article className="kpi-card">
             <p className="kpi-label">Active Event</p>
@@ -71,7 +68,7 @@ export const App = () => {
           </article>
           <article className="kpi-card">
             <p className="kpi-label">Workflow</p>
-            <p className="kpi-value kpi-value--sm">🧭 {workflowStep}</p>
+            <p className="kpi-value kpi-value--sm">{workflowStep}</p>
             <p className="tiny-copy kpi-subcopy">Drawn winners: {raffleStats.drawn}</p>
           </article>
         </section>

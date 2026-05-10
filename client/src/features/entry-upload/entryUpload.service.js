@@ -123,3 +123,21 @@ export const createEntry = async ({ eventId, employeeId, fullName, department, e
 
   return res.json();
 };
+
+export const fetchAllEntriesForEvent = async (eventId) => {
+  const pageSize = 100;
+  let page = 1;
+  let totalPages = 1;
+  const all = [];
+
+  while (page <= totalPages) {
+    const res = await fetch(`/api/events/${eventId}/entries?page=${page}&pageSize=${pageSize}`);
+    if (!res.ok) throw new Error('Failed to load existing entries for duplicate checking.');
+    const data = await res.json();
+    all.push(...(data.entries || []));
+    totalPages = data.totalPages || 1;
+    page += 1;
+  }
+
+  return all;
+};

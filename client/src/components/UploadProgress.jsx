@@ -18,6 +18,7 @@ export default function UploadProgress({ progress, displayProgress }) {
   const isCanceling = progress.status === 'canceling';
 
   const stageIndex = STAGES.indexOf(stage);
+  const percent = isDone ? 100 : Math.max(0, Math.min(100, Math.round(displayProgress || 0)));
 
   return (
     <div className={`soft-card upload-progress-card${isError ? ' upload-progress-card--error' : ''}${isCanceled || isCanceling ? ' upload-progress-card--canceled' : ''}`}>
@@ -65,7 +66,8 @@ export default function UploadProgress({ progress, displayProgress }) {
         </div>
       </div>
       <div className="progress-track" style={{ marginTop: '1rem' }}>
-        <div className="progress-fill" style={{ width: `${isDone ? 100 : displayProgress}%` }} />
+        <div className="progress-fill" style={{ width: `${percent}%` }} />
+        <span className="progress-percent">{percent}%</span>
       </div>
     </div>
   );

@@ -70,7 +70,7 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
   return (
     <div className="event-selector">
       <div className="event-selector-header">
-        <p className="field-label">Raffle event</p>
+        <p className="field-label">Raffle Event</p>
         {!creating && (
           <button type="button" className="btn-ghost-sm" onClick={() => setCreating(true)}>
             + New event
@@ -106,7 +106,7 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
       )}
 
       {loading ? (
-        <p className="tiny-copy">Loading events…</p>
+        <p className="tiny-copy">Loading events...</p>
       ) : events.length === 0 && !creating ? (
         <p className="tiny-copy">No events yet. Create one to get started.</p>
       ) : (
@@ -149,7 +149,7 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
                     aria-label={`Delete ${ev.name}`}
                     onClick={() => setDeletingId(ev.id)}
                   >
-                    ✕
+                    X
                   </button>
                 </>
               )}

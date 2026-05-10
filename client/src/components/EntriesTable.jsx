@@ -14,7 +14,6 @@ export default function EntriesTable({ eventId, refreshKey }) {
   const [loading, setLoading] = useState(false);
   const debounceRef = useRef(null);
 
-  // Reset to page 1 whenever filters change
   useEffect(() => {
     setPage(1);
   }, [search, department, eventId]);
@@ -67,17 +66,16 @@ export default function EntriesTable({ eventId, refreshKey }) {
 
       <div className="entries-controls">
         <div className="search-wrap">
-          <span className="search-icon" aria-hidden="true">⌕</span>
           <input
             type="search"
             className="entries-search"
-            placeholder="Search name, ID, email, or entry code…"
+            placeholder="Search name, ID, email, or entry code..."
             value={searchInput}
             onChange={handleSearchChange}
           />
           {searchInput && (
             <button type="button" className="search-clear" onClick={handleClearSearch} aria-label="Clear search">
-              ✕
+              Clear
             </button>
           )}
         </div>
@@ -97,12 +95,12 @@ export default function EntriesTable({ eventId, refreshKey }) {
 
       {loading && entries.length === 0 ? (
         <div className="entries-state">
-          <span className="entries-state-icon">⋯</span>
-          <p>Loading entries…</p>
+          <span className="entries-state-icon">...</span>
+          <p>Loading entries...</p>
         </div>
       ) : entries.length === 0 ? (
         <div className="entries-state">
-          <span className="entries-state-icon">○</span>
+          <span className="entries-state-icon">0</span>
           <p>{hasActiveFilter ? 'No entries match your search.' : 'No entries uploaded yet.'}</p>
           {hasActiveFilter && (
             <button type="button" className="btn-ghost-sm" onClick={() => { setSearchInput(''); setSearch(''); setDepartment(''); }}>
@@ -152,10 +150,10 @@ export default function EntriesTable({ eventId, refreshKey }) {
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1 || loading}
             >
-              ← Prev
+              Prev
             </button>
             <span className="pagination-info">
-              {start.toLocaleString()}–{end.toLocaleString()} of {total.toLocaleString()}
+              {start.toLocaleString()}-{end.toLocaleString()} of {total.toLocaleString()}
             </span>
             <button
               type="button"
@@ -163,7 +161,7 @@ export default function EntriesTable({ eventId, refreshKey }) {
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages || loading}
             >
-              Next →
+              Next
             </button>
           </div>
         </>
