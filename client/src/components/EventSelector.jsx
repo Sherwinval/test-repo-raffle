@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import EventCustomizationWizard from './EventCustomizationWizard';
 
 const IconTrash = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -25,6 +26,9 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
+  const [customizationOpen, setCustomizationOpen] = useState(false);
+  const [customizationEvent, setCustomizationEvent] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
 
   useEffect(() => {
     fetchEvents();
@@ -61,6 +65,9 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
       const created = await res.json();
       setEvents((prev) => [created, ...prev]);
       onSelect(created);
+      setCustomizationEvent(created);
+      setCustomizationOpen(true);
+      setSuccessMessage(null);
       setCreating(false);
       setNewName('');
       setError(null);
@@ -175,6 +182,18 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
             </div>
           ))}
         </div>
+      )}
+      {successMessage && <p className="tiny-copy" style={{ marginTop: '0.75rem', color: '#22c55e' }}>{successMessage}</p>}
+      {customizationOpen && customizationEvent && (
+        <EventCustomizationWizard
+          event={customizationEvent}
+          onClose={() => { setCustomizationOpen(false); setCustomizationEvent(null); }}
+          onPublish={() => {
+            setCustomizationOpen(false);
+            setSuccessMessage('Event customization published successfully.');
+            setCustomizationEvent(null);
+          }}
+        />
       )}
     </div>
   );
