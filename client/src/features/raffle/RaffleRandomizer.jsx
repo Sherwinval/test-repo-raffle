@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SlotMachine } from './SlotMachine';
 import { OrbitDrawMachine } from './OrbitDrawMachine';
 import { drawWinner, mapEntryIds } from './raffle.logic';
@@ -16,10 +16,11 @@ const IconStar = () => (
   </svg>
 );
 
-export const RaffleRandomizer = ({ selectedEvent, onStatsChange }) => {
+export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, onSpinStateChange }) => {
   const [entries, setEntries] = useState([]);
   const [winners, setWinners] = useState([]);
   const [error, setError] = useState('');
+  const [isLoadingEntries, setIsLoadingEntries] = useState(false);
   const [isSpinning, setIsSpinning] = useState(false);
   const [spinComplete, setSpinComplete] = useState(false);
   const [pendingWinner, setPendingWinner] = useState(null);
@@ -28,31 +29,68 @@ export const RaffleRandomizer = ({ selectedEvent, onStatsChange }) => {
   const [drawDurationSec, setDrawDurationSec] = useState(4);
   const [raffleStyle, setRaffleStyle] = useState('classic');
 
-  useEffect(() => {
+  const uploadStatus = uploadState?.status || 'idle';
+  const uploadIsActive = Boolean(uploadState?.isActive);
+
+  const loadEntries = useCallback(() => {
     if (!selectedEvent?.id) return;
+    let isCurrent = true;
+    setIsLoadingEntries(true);
     fetchAllEventEntries(selectedEvent.id)
       .then((rows) => {
+        if (!isCurrent) return;
         setEntries(rows);
         setError('');
       })
-      .catch((e) => setError(e.message));
+      .catch((e) => {
+        if (!isCurrent) return;
+        setError(e.message);
+      })
+      .finally(() => {
+        if (isCurrent) setIsLoadingEntries(false);
+      });
 
     setWinners(getWinnersForEvent(selectedEvent.id));
     setIsSpinning(false);
     setSpinComplete(false);
     setPendingWinner(null);
     setShowWinnerPopup(false);
-  }, [selectedEvent]);
+    return () => {
+      isCurrent = false;
+    };
+  }, [selectedEvent?.id]);
+
+  useEffect(() => loadEntries(), [loadEntries]);
+
+  useEffect(() => {
+    if (uploadStatus !== 'done') return undefined;
+    return loadEntries();
+  }, [loadEntries, uploadStatus]);
 
   const excludedWinnerIds = useMemo(() => new Set(winners.map((w) => w.entry.id)), [winners]);
   const eligibleEntries = useMemo(() => entries.filter((entry) => !excludedWinnerIds.has(entry.id)), [entries, excludedWinnerIds]);
   const eligibleIds = useMemo(() => mapEntryIds(eligibleEntries), [eligibleEntries]);
+  const spinIsPreparing = uploadIsActive || isLoadingEntries;
+  const spinDisabled = isSpinning || spinIsPreparing || eligibleEntries.length === 0;
+  const spinLabel = isSpinning
+    ? 'SPINNING...'
+    : uploadIsActive
+      ? 'PREPARING ENTRIES...'
+      : isLoadingEntries
+        ? 'LOADING ENTRIES...'
+        : eligibleEntries.length === 0
+          ? 'NO ENTRIES READY'
+          : 'SPIN';
 
   useEffect(() => {
     if (onStatsChange) {
       onStatsChange({ total: entries.length, eligible: eligibleEntries.length, drawn: winners.length });
     }
   }, [entries.length, eligibleEntries.length, winners.length, onStatsChange]);
+
+  useEffect(() => {
+    onSpinStateChange?.(isSpinning);
+  }, [isSpinning, onSpinStateChange]);
 
   const preselectWinner = () => {
     const result = drawWinner(entries, excludedWinnerIds);
@@ -158,7 +196,10 @@ export const RaffleRandomizer = ({ selectedEvent, onStatsChange }) => {
         )}
 
         <div className="raffle-action-row">
-          <button type="button" className="btn-primary action-btn spin-btn" onClick={preselectWinner} disabled={isSpinning || eligibleEntries.length === 0}>SPIN</button>
+          <button type="button" className="btn-primary action-btn spin-btn" onClick={preselectWinner} disabled={spinDisabled}>
+            {spinIsPreparing && <span className="button-spinner" aria-hidden="true" />}
+            {spinLabel}
+          </button>
           {spinComplete && pendingWinner && <button type="button" className="btn-primary action-btn claim-btn" onClick={confirmWinner}>CLAIM / CONFIRM WINNER</button>}
           <button type="button" className="btn-ghost" onClick={onReset} disabled={isSpinning}>Reset Winners</button>
         </div>

@@ -1,4 +1,4 @@
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 10000;
 const WINNER_STORAGE_KEY = 'raffle:winners';
 
 export const fetchAllEventEntries = async (eventId) => {

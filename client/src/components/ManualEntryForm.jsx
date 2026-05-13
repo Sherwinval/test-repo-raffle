@@ -89,6 +89,13 @@ function normalizeForCompare(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+function getBulkProgressMessage(status) {
+  if (status === 'validating') return 'Validating pasted text...';
+  if (status === 'done') return 'Upload complete.';
+  if (status === 'canceled') return 'Bulk upload canceled.';
+  return 'Uploading rows...';
+}
+
 export default function ManualEntryForm({ eventId, onEntryCreated, onError }) {
   const [mode, setMode] = useState('single');
   const [formData, setFormData] = useState({
@@ -212,6 +219,24 @@ export default function ManualEntryForm({ eventId, onEntryCreated, onError }) {
         percent: 0,
         status: 'validating'
       });
+
+      if (rowsToUpload.length === 0) {
+        setBulkProgress({
+          total: 0,
+          processed: 0,
+          created: 0,
+          failed: 0,
+          percent: 100,
+          status: 'done'
+        });
+        setBulkResult({
+          total: 0,
+          created: 0,
+          failed: 0,
+          canceled: false
+        });
+        return;
+      }
 
       const stallTimer = window.setInterval(() => {
         if (Date.now() - lastTick > 8000) {
@@ -353,13 +378,7 @@ export default function ManualEntryForm({ eventId, onEntryCreated, onError }) {
               <div className="split-row">
                 <div>
                   <p className="card-heading">Bulk upload progress</p>
-                  <p className="tiny-copy">
-                    {bulkProgress.status === 'validating'
-                      ? 'Validating pasted text...'
-                      : bulkProgress.status === 'canceled'
-                        ? 'Bulk upload canceled.'
-                        : 'Uploading rows...'}
-                  </p>
+                  <p className="tiny-copy">{getBulkProgressMessage(bulkProgress.status)}</p>
                 </div>
                 <div className="stat-col">
                   <p>{bulkProgress.processed}/{bulkProgress.total} rows</p>

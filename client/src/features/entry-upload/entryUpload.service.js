@@ -88,6 +88,19 @@ export const fetchUploadProgress = async (uploadId) => {
   return res.json();
 };
 
+export const resolveUploadIssues = async ({ uploadId, rows }) => {
+  const res = await fetch(`/api/upload/resolve/${uploadId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rows })
+  });
+  const body = await res.json();
+  if (!res.ok) {
+    throw new Error(body?.error || 'Failed to resolve upload issues.');
+  }
+  return body;
+};
+
 export const fetchEntryStats = async (eventId) => {
   const res = await fetch(`/api/events/${eventId}/entries/stats`);
   if (!res.ok) throw new Error('Failed to fetch entry count.');

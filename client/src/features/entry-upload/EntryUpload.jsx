@@ -3,21 +3,55 @@ import EventSelector from '@/components/EventSelector';
 import UploadZone from '@/components/UploadZone';
 import ManualEntryForm from '@/components/ManualEntryForm';
 import DuplicateModal from '@/components/DuplicateModal';
+import EntryIssueModal from '@/components/EntryIssueModal';
 import UploadProgress from '@/components/UploadProgress';
 import UploadSummary from '@/components/UploadSummary';
 import EntriesTable from '@/components/EntriesTable';
 import { getProgressPercent, validateEntryUploadSelection } from './entryUpload.logic';
-import { cancelUpload, fetchEntryStats, fetchUploadProgress, uploadEntries } from './entryUpload.service';
+import { cancelUpload, fetchEntryStats, fetchUploadProgress, resolveUploadIssues, uploadEntries } from './entryUpload.service';
 
-export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEvent, onStatsChange }) => {
+const UPLOAD_PROGRESS_STORAGE_KEY = 'rafflehub:active-upload-progress';
+const ACTIVE_UPLOAD_STATUSES = new Set(['uploading', 'parsing', 'pending', 'validating', 'needs-review', 'saving', 'processing', 'canceling', 'reconnecting']);
+const FINISHED_UPLOAD_STATUSES = new Set(['done', 'error', 'canceled']);
+
+function readSavedUploadProgress(eventId) {
+  if (!eventId) return null;
+  try {
+    const saved = JSON.parse(localStorage.getItem(UPLOAD_PROGRESS_STORAGE_KEY) || 'null');
+    if (saved?.eventId !== eventId) return null;
+    if (FINISHED_UPLOAD_STATUSES.has(saved.progress?.status)) return null;
+    return saved;
+  } catch {
+    return null;
+  }
+}
+
+function saveUploadProgressSnapshot({ eventId, uploadId, progress }) {
+  if (!eventId || !progress || FINISHED_UPLOAD_STATUSES.has(progress.status)) {
+    localStorage.removeItem(UPLOAD_PROGRESS_STORAGE_KEY);
+    return;
+  }
+
+  localStorage.setItem(UPLOAD_PROGRESS_STORAGE_KEY, JSON.stringify({
+    eventId,
+    uploadId,
+    progress,
+    updatedAt: Date.now()
+  }));
+}
+
+export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEvent, onStatsChange, onUploadStateChange }) => {
   const [file, setFile] = useState(null);
   const [uploadId, setUploadId] = useState(null);
   const [progress, setProgress] = useState(null);
   const [error, setError] = useState(null);
   const [displayProgress, setDisplayProgress] = useState(0);
   const [duplicateModal, setDuplicateModal] = useState(null);
+  const [issueModalRows, setIssueModalRows] = useState(null);
+  const [isResolvingIssues, setIsResolvingIssues] = useState(false);
   const [entryCount, setEntryCount] = useState(null);
   const [isSubmittingUpload, setIsSubmittingUpload] = useState(false);
+  const [progressPollKey, setProgressPollKey] = useState(0);
   const [tableRefreshKey, setTableRefreshKey] = useState(0);
   const [entryMode, setEntryMode] = useState('upload'); // 'upload' or 'manual'
   const fileInputRef = useRef(null);
@@ -51,9 +85,27 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
       try {
         const data = await fetchUploadProgress(uploadId);
         setProgress(data);
+        saveUploadProgressSnapshot({ eventId: selectedEvent?.id, uploadId, progress: data });
         if (data.status === 'error' && data.error) setError(data.error);
+        if (data.status === 'duplicate-confirmation') {
+          window.clearInterval(intervalId);
+          setUploadId(null);
+          setDuplicateModal({
+            totalRows: data.totalRows ?? data.total ?? 0,
+            duplicateCount: data.duplicateCount ?? data.duplicatesDetected ?? 0,
+            fileDuplicateCount: data.fileDuplicateCount ?? 0,
+            existingDuplicateCount: data.existingDuplicateCount ?? 0
+          });
+          return;
+        }
+        if (data.status === 'needs-review') {
+          window.clearInterval(intervalId);
+          setIssueModalRows(data.invalidRows || []);
+          return;
+        }
         if (data.status === 'done' || data.status === 'error' || data.status === 'canceled') {
           window.clearInterval(intervalId);
+          localStorage.removeItem(UPLOAD_PROGRESS_STORAGE_KEY);
           setUploadId(null);
           setFile(null);
           if (fileInputRef.current) fileInputRef.current.value = '';
@@ -64,11 +116,20 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
           setTableRefreshKey((k) => k + 1);
         }
       } catch {
-        setError('Unable to fetch upload status.');
+        setProgress((current) => {
+          const next = {
+            ...(current ?? { total: 0, processed: 0, inserted: 0 }),
+            status: 'reconnecting',
+            priorStatus: current?.status === 'reconnecting' ? current?.priorStatus : current?.status,
+            error: 'Reconnecting to upload progress...'
+          };
+          saveUploadProgressSnapshot({ eventId: selectedEvent?.id, uploadId, progress: next });
+          return next;
+        });
       }
-    }, 1000);
+    }, 500);
     return () => window.clearInterval(intervalId);
-  }, [uploadId, selectedEvent]);
+  }, [progressPollKey, uploadId, selectedEvent]);
 
   useEffect(() => {
     if (onStatsChange) {
@@ -77,10 +138,27 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
   }, [entryCount, onStatsChange]);
 
   useEffect(() => {
+    onUploadStateChange?.({
+      status: progress?.status || 'idle',
+      isActive: ACTIVE_UPLOAD_STATUSES.has(progress?.status) || isSubmittingUpload || Boolean(uploadId)
+    });
+  }, [isSubmittingUpload, onUploadStateChange, progress?.status, uploadId]);
+
+  useEffect(() => {
+    if (!selectedEvent?.id || !progress) return;
+    saveUploadProgressSnapshot({ eventId: selectedEvent.id, uploadId, progress });
+  }, [progress, selectedEvent?.id, uploadId]);
+
+  useEffect(() => {
     if (selectedEvent) {
-      setProgress(null);
+      const saved = readSavedUploadProgress(selectedEvent.id);
+      setProgress(saved?.progress ?? null);
+      setUploadId(saved?.uploadId ?? null);
+      if (saved?.progress?.status === 'needs-review') {
+        setIssueModalRows(saved.progress.invalidRows || []);
+      }
       setError(null);
-      setDisplayProgress(0);
+      setDisplayProgress(saved?.progress ? getProgressPercent(saved.progress) : 0);
       setFile(null);
       fetchEntryStats(selectedEvent.id).then((d) => setEntryCount(d.totalEntries)).catch(() => setEntryCount(null));
     }
@@ -97,8 +175,15 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
 
     setError(null);
     if (!duplicateMode) {
-      setProgress(null);
+      const initialProgress = { status: 'uploading', total: 0, processed: 0, inserted: 0 };
+      setProgress(initialProgress);
+      saveUploadProgressSnapshot({ eventId: selectedEvent.id, uploadId: null, progress: initialProgress });
       setDisplayProgress(0);
+    } else {
+      setProgress((current) => ({
+        ...(current ?? { total: 0, processed: 0, inserted: 0 }),
+        status: 'uploading'
+      }));
     }
 
     const abortController = new AbortController();
@@ -120,12 +205,20 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
           fileDuplicateCount: body.fileDuplicateCount ?? 0,
           existingDuplicateCount: body.existingDuplicateCount ?? 0
         });
+        setProgress((current) => ({ ...(current ?? {}), status: 'duplicate-confirmation' }));
         return;
       }
-      setUploadId(result.payload.uploadId);
+      const nextUploadId = result.payload.uploadId;
+      setUploadId(nextUploadId);
+      saveUploadProgressSnapshot({
+        eventId: selectedEvent.id,
+        uploadId: nextUploadId,
+        progress: progress ?? { status: 'uploading', total: 0, processed: 0, inserted: 0 }
+      });
     } catch (err) {
       if (err.name === 'AbortError') {
         setProgress({ status: 'canceled', total: 0, processed: 0, inserted: 0 });
+        localStorage.removeItem(UPLOAD_PROGRESS_STORAGE_KEY);
         setError(null);
       } else {
         setError(err.message || 'Upload failed.');
@@ -142,6 +235,7 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
     const currentUploadId = uploadIdRef.current;
     if (!currentUploadId) {
       setProgress({ status: 'canceled', total: 0, processed: 0, inserted: 0 });
+      localStorage.removeItem(UPLOAD_PROGRESS_STORAGE_KEY);
       setUploadId(null);
       setIsSubmittingUpload(false);
       setFile(null);
@@ -157,6 +251,7 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
     try {
       const canceledProgress = await cancelUpload(currentUploadId);
       setProgress(canceledProgress);
+      localStorage.removeItem(UPLOAD_PROGRESS_STORAGE_KEY);
       setError(null);
       setUploadId(null);
       setFile(null);
@@ -168,6 +263,23 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
       setTableRefreshKey((k) => k + 1);
     } catch (err) {
       setError(err.message || 'Failed to cancel upload.');
+    }
+  };
+
+  const handleResolveIssues = async (rows) => {
+    if (!uploadId) return;
+    setIsResolvingIssues(true);
+    setError(null);
+
+    try {
+      const nextProgress = await resolveUploadIssues({ uploadId, rows });
+      setProgress(nextProgress);
+      setIssueModalRows(null);
+      setProgressPollKey((key) => key + 1);
+    } catch (err) {
+      setError(err.message || 'Failed to resolve upload issues.');
+    } finally {
+      setIsResolvingIssues(false);
     }
   };
 
@@ -195,6 +307,8 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
           onDeleteSelectedEvent();
           setFile(null);
           setProgress(null);
+          setIssueModalRows(null);
+          localStorage.removeItem(UPLOAD_PROGRESS_STORAGE_KEY);
           setError(null);
           setDisplayProgress(0);
         }}
@@ -275,6 +389,14 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
           onClose={() => setDuplicateModal(null)}
           onUploadWith={() => { setDuplicateModal(null); handleUpload('with'); }}
           onUploadWithout={() => { setDuplicateModal(null); handleUpload('without'); }}
+        />
+      )}
+
+      {issueModalRows && (
+        <EntryIssueModal
+          rows={issueModalRows}
+          resolving={isResolvingIssues}
+          onResolve={handleResolveIssues}
         />
       )}
     </>

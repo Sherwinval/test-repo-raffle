@@ -18,10 +18,16 @@ export const App = () => {
   const [activeTab, setActiveTab] = useState(TAB_IDS.ENTRY_UPLOAD);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [uploadStats, setUploadStats] = useState({ entryCount: 0 });
+  const [uploadState, setUploadState] = useState({ status: 'idle', isActive: false });
   const [raffleStats, setRaffleStats] = useState({ total: 0, eligible: 0, drawn: 0 });
+  const [isDrawSpinning, setIsDrawSpinning] = useState(false);
   const isUploadTab = activeTab === TAB_IDS.ENTRY_UPLOAD;
   const isRaffleTab = activeTab === TAB_IDS.RAFFLE;
   const workflowStep = !selectedEvent ? 'Select Event' : isUploadTab ? 'Upload Entries' : 'Run Draw';
+  const uploadLockStatuses = new Set(['uploading', 'parsing', 'pending', 'validating', 'saving', 'processing', 'canceling', 'reconnecting']);
+  const isUploadLocked = uploadLockStatuses.has(uploadState.status);
+  const interactionLocked = isDrawSpinning || isUploadLocked;
+  const lockMessage = isDrawSpinning ? 'Drawing winner. Please wait...' : 'Uploading entries. Please wait...';
 
   return (
     <div className="dashboard-shell app-root">
@@ -96,14 +102,29 @@ export const App = () => {
               onSelectEvent={setSelectedEvent}
               onDeleteSelectedEvent={() => setSelectedEvent(null)}
               onStatsChange={setUploadStats}
+              onUploadStateChange={setUploadState}
             />
           </section>
 
           <section hidden={!isRaffleTab}>
-            <RaffleRandomizer selectedEvent={selectedEvent} onStatsChange={setRaffleStats} />
+            <RaffleRandomizer
+              selectedEvent={selectedEvent}
+              uploadState={uploadState}
+              onStatsChange={setRaffleStats}
+              onSpinStateChange={setIsDrawSpinning}
+            />
           </section>
         </section>
       </main>
+
+      {interactionLocked && (
+        <div className="interaction-lock" role="status" aria-live="polite" aria-label={lockMessage}>
+          <div className="interaction-lock-banner">
+            <span className="button-spinner" aria-hidden="true" />
+            <span>{lockMessage}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

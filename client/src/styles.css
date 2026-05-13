@@ -2472,10 +2472,16 @@ body {
 }
 
 .spin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
   min-width: 150px;
   min-height: 46px;
   font-size: 15px;
   font-weight: 700;
+  text-align: center;
+  line-height: 1.1;
 }
 .spin-btn:hover { box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.24) !important; }
 
@@ -2919,6 +2925,86 @@ body,
 }
 .spin-icon {
   animation: spin-rotate 1.2s linear infinite;
+}
+
+.button-spinner {
+  display: inline-block;
+  width: 0.95em;
+  height: 0.95em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  vertical-align: -0.12em;
+  animation: spin-rotate 0.8s linear infinite;
+}
+
+.interaction-lock {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 1rem;
+  background: rgba(0, 0, 0, 0.08);
+  cursor: wait;
+}
+
+.interaction-lock-banner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  padding: 0.65rem 1rem;
+  border: 1px solid rgba(255, 140, 0, 0.42);
+  border-radius: 999px;
+  background: rgba(12, 12, 14, 0.94);
+  color: #ffd08a;
+  font-size: 0.82rem;
+  font-weight: 800;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.38);
+  pointer-events: none;
+}
+
+.entry-issue-modal {
+  width: min(1120px, calc(100vw - 24px));
+}
+
+.entry-issue-toolbar {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0.75rem 0;
+}
+
+.entry-issue-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.entry-issue-row {
+  border: 1px solid var(--line-dark);
+  border-radius: 0.75rem;
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.entry-issue-row--delete {
+  opacity: 0.72;
+}
+
+.entry-issue-fields {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+}
+
+@media (max-width: 920px) {
+  .entry-issue-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* Progress bar glow */
