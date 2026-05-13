@@ -40,7 +40,19 @@ function saveUploadProgressSnapshot({ eventId, uploadId, progress }) {
   }));
 }
 
-export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEvent, onStatsChange, onUploadStateChange }) => {
+export const EntryUpload = ({
+  selectedEvent,
+  onSelectEvent,
+  onDeleteSelectedEvent,
+  onStatsChange,
+  onUploadStateChange,
+  onAuditChange,
+  onEntriesChanged,
+  showEntriesTable = true,
+  showEntryTools = true,
+  showEventSelector = true,
+  enableUploadLogic = true
+}) => {
   const [file, setFile] = useState(null);
   const [uploadId, setUploadId] = useState(null);
   const [progress, setProgress] = useState(null);
@@ -80,6 +92,7 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
   }, [uploadId]);
 
   useEffect(() => {
+    if (!enableUploadLogic) return;
     if (!uploadId) return;
     const intervalId = window.setInterval(async () => {
       try {
@@ -112,8 +125,10 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
           if (selectedEvent) {
             const stats = await fetchEntryStats(selectedEvent.id);
             setEntryCount(stats.totalEntries);
+            onAuditChange?.();
           }
           setTableRefreshKey((k) => k + 1);
+          onEntriesChanged?.();
         }
       } catch {
         setProgress((current) => {
@@ -129,7 +144,7 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
       }
     }, 500);
     return () => window.clearInterval(intervalId);
-  }, [progressPollKey, uploadId, selectedEvent]);
+  }, [enableUploadLogic, progressPollKey, uploadId, selectedEvent]);
 
   useEffect(() => {
     if (onStatsChange) {
@@ -138,18 +153,21 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
   }, [entryCount, onStatsChange]);
 
   useEffect(() => {
+    if (!enableUploadLogic) return;
     onUploadStateChange?.({
       status: progress?.status || 'idle',
       isActive: ACTIVE_UPLOAD_STATUSES.has(progress?.status) || isSubmittingUpload || Boolean(uploadId)
     });
-  }, [isSubmittingUpload, onUploadStateChange, progress?.status, uploadId]);
+  }, [enableUploadLogic, isSubmittingUpload, onUploadStateChange, progress?.status, uploadId]);
 
   useEffect(() => {
+    if (!enableUploadLogic) return;
     if (!selectedEvent?.id || !progress) return;
     saveUploadProgressSnapshot({ eventId: selectedEvent.id, uploadId, progress });
-  }, [progress, selectedEvent?.id, uploadId]);
+  }, [enableUploadLogic, progress, selectedEvent?.id, uploadId]);
 
   useEffect(() => {
+    if (!enableUploadLogic) return;
     if (selectedEvent) {
       const saved = readSavedUploadProgress(selectedEvent.id);
       setProgress(saved?.progress ?? null);
@@ -162,7 +180,7 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
       setFile(null);
       fetchEntryStats(selectedEvent.id).then((d) => setEntryCount(d.totalEntries)).catch(() => setEntryCount(null));
     }
-  }, [selectedEvent]);
+  }, [enableUploadLogic, selectedEvent]);
 
   const handleUpload = async (duplicateMode = null) => {
     if (!file || !selectedEvent) return;
@@ -261,6 +279,7 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
         setEntryCount(stats.totalEntries);
       }
       setTableRefreshKey((k) => k + 1);
+      onEntriesChanged?.();
     } catch (err) {
       setError(err.message || 'Failed to cancel upload.');
     }
@@ -285,11 +304,13 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
 
   const handleEntryCreated = () => {
     setTableRefreshKey(prev => prev + 1);
+    onEntriesChanged?.();
     // Refresh entry count
     if (selectedEvent) {
       fetchEntryStats(selectedEvent.id).then(stats => {
         setEntryCount(stats.totalEntries);
-        onStatsChange?.(stats);
+      onStatsChange?.(stats);
+        onAuditChange?.();
       }).catch(() => {});
     }
   };
@@ -300,21 +321,23 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
 
   return (
     <>
-      <EventSelector
-        selectedEvent={selectedEvent}
-        onSelect={onSelectEvent}
-        onDelete={() => {
-          onDeleteSelectedEvent();
-          setFile(null);
-          setProgress(null);
-          setIssueModalRows(null);
-          localStorage.removeItem(UPLOAD_PROGRESS_STORAGE_KEY);
-          setError(null);
-          setDisplayProgress(0);
-        }}
-      />
+      {showEventSelector && (
+        <EventSelector
+          selectedEvent={selectedEvent}
+          onSelect={onSelectEvent}
+          onDelete={() => {
+            onDeleteSelectedEvent();
+            setFile(null);
+            setProgress(null);
+            setIssueModalRows(null);
+            localStorage.removeItem(UPLOAD_PROGRESS_STORAGE_KEY);
+            setError(null);
+            setDisplayProgress(0);
+          }}
+        />
+      )}
 
-      {selectedEvent && (
+      {selectedEvent && showEntryTools && (
         <>
           <div className="section-divider" />
 
@@ -374,12 +397,16 @@ export const EntryUpload = ({ selectedEvent, onSelectEvent, onDeleteSelectedEven
             {progress?.status === 'done' && <UploadSummary progress={progress} />}
           </div>
 
-          <div className="section-divider" />
+          {showEntriesTable && (
+            <>
+              <div className="section-divider" />
 
-          <EntriesTable
-            eventId={selectedEvent.id}
-            refreshKey={tableRefreshKey}
-          />
+              <EntriesTable
+                eventId={selectedEvent.id}
+                refreshKey={tableRefreshKey}
+              />
+            </>
+          )}
         </>
       )}
 

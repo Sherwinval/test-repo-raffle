@@ -51,6 +51,7 @@ export const uploadEntries = async ({ eventId, file, duplicateMode, signal }) =>
   const formData = new FormData();
   formData.append('file', file);
   if (duplicateMode) formData.append('duplicateMode', duplicateMode);
+  formData.append('operator', 'Raffle Operator');
 
   const res = await fetch(`/api/events/${eventId}/entries/upload`, {
     method: 'POST',
@@ -121,7 +122,7 @@ export const createEntry = async ({ eventId, employeeId, fullName, department, e
   const res = await fetch(`/api/events/${eventId}/entries`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ employeeId, fullName, department, email, entryCode })
+    body: JSON.stringify({ employeeId, fullName, department, email, entryCode, operator: 'Raffle Operator' })
   });
 
   if (res.status === 409) {
@@ -134,6 +135,25 @@ export const createEntry = async ({ eventId, employeeId, fullName, department, e
     throw new Error(body?.error || 'Failed to create entry.');
   }
 
+  return res.json();
+};
+
+export const fetchEventAudit = async (eventId) => {
+  const res = await fetch(`/api/events/${eventId}/audit`);
+  if (!res.ok) throw new Error('Failed to fetch event audit log.');
+  return res.json();
+};
+
+export const appendEventAudit = async ({ eventId, action, operator = 'Raffle Operator', details = {} }) => {
+  const res = await fetch(`/api/events/${eventId}/audit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, operator, details })
+  });
+  if (!res.ok) {
+    const body = await res.json();
+    throw new Error(body?.error || 'Failed to write audit log.');
+  }
   return res.json();
 };
 

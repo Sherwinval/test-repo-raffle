@@ -4,6 +4,7 @@ import { parseFileBuffer } from '../utils/parseFile.js';
 import { findDuplicateValues } from '../utils/duplicates.js';
 import { formatUploadError } from '../utils/errors.js';
 import { progressMap, uploadContextMap } from '../services/progress.service.js';
+import { appendAuditLog } from '../services/audit.service.js';
 import {
   findExistingEntryCodes,
   findExistingEntryEmployeeIds,
@@ -97,6 +98,17 @@ async function continueEntryUpload({ uploadId, eventId, rows, duplicateMode, rev
   const uploadWithoutDuplicates = duplicateMode === 'without';
 
   if (duplicateCount > 0 && !uploadWithDuplicates && !uploadWithoutDuplicates) {
+    await appendAuditLog({
+      eventId,
+      action: 'deduplication_review_required',
+      details: {
+        uploadId,
+        totalRows: rows.length,
+        fileDuplicateCount,
+        existingDuplicateCount,
+        duplicateCount
+      }
+    });
     progressMap.set(uploadId, {
       ...progressMap.get(uploadId),
       status: 'duplicate-confirmation',
@@ -117,6 +129,22 @@ async function continueEntryUpload({ uploadId, eventId, rows, duplicateMode, rev
     ? validRows
     : buildEntryRowsWithoutDuplicates(validRows, existingCodes, existingEmployeeIds, existingEmails);
 
+  await appendAuditLog({
+    eventId,
+    action: duplicateCount > 0 ? 'deduplication_run' : 'entry_upload_validated',
+    details: {
+      uploadId,
+      batchId: batch.id,
+      duplicateMode: duplicateMode || 'none',
+      totalRows: rows.length,
+      rowsToInsert: rowsToInsert.length,
+      skippedRows: rows.length - rowsToInsert.length,
+      fileDuplicateCount,
+      existingDuplicateCount,
+      duplicateCount
+    }
+  });
+
   progressMap.set(uploadId, {
     ...progressMap.get(uploadId),
     status: 'saving',
@@ -130,6 +158,18 @@ async function continueEntryUpload({ uploadId, eventId, rows, duplicateMode, rev
   });
 
   await processEntryUpload(uploadId, batch.id, eventId, rowsToInsert, [], rows.length);
+  const doneProgress = progressMap.get(uploadId) || {};
+  await appendAuditLog({
+    eventId,
+    action: 'entry_upload_completed',
+    details: {
+      uploadId,
+      batchId: batch.id,
+      totalRows: rows.length,
+      insertedRows: doneProgress.inserted ?? rowsToInsert.length,
+      skippedRows: doneProgress.skippedRows ?? rows.length - rowsToInsert.length
+    }
+  });
   uploadContextMap.delete(uploadId);
 }
 
@@ -159,6 +199,17 @@ export async function uploadEntries(req, res) {
     duplicatesDetected: 0,
     uploadMode: duplicateMode || 'none',
     errors: []
+  });
+
+  await appendAuditLog({
+    eventId,
+    action: 'entry_upload_started',
+    operator: req.body?.operator,
+    details: {
+      uploadId,
+      fileName: file.originalname,
+      duplicateMode: duplicateMode || 'none'
+    }
   });
 
   res.status(202).json({ uploadId });
@@ -348,6 +399,18 @@ export async function createEntry(req, res) {
         department,
         email,
         entryCode
+      }
+    });
+
+    await appendAuditLog({
+      eventId,
+      action: 'manual_entry_added',
+      operator: req.body?.operator,
+      details: {
+        entryId: entry.id,
+        employeeId: entry.employeeId,
+        fullName: entry.fullName,
+        entryCode: entry.entryCode
       }
     });
 

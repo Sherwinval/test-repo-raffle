@@ -1800,6 +1800,7 @@ body {
   margin-top: 0.75rem;
   display: flex;
   gap: 0.4rem;
+  width: 100%;
 }
 
 .tab-wrap {
@@ -1807,7 +1808,7 @@ body {
   border: 1px solid var(--line);
   border-radius: 0.65rem;
   background: var(--soft);
-  width: fit-content;
+  width: 100%;
 }
 
 .tab-btn {
@@ -1820,6 +1821,8 @@ body {
   font-weight: 600;
   cursor: pointer;
   transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+  flex: 1 1 0;
+  text-align: center;
 }
 
 .tab-btn--active {
@@ -2946,8 +2949,9 @@ body,
   align-items: flex-start;
   justify-content: center;
   padding-top: 1rem;
-  background: rgba(0, 0, 0, 0.08);
-  cursor: wait;
+  background: transparent;
+  pointer-events: none;
+  cursor: default;
 }
 
 .interaction-lock-banner {
@@ -3199,4 +3203,75 @@ body,
   display: flex;
   align-items: center;
   gap: 0.4rem;
+}
+
+.audit-log-card {
+  margin-top: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.audit-log-header {
+  align-items: flex-start;
+}
+
+.audit-export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.audit-export-actions .btn-ghost {
+  min-height: 36px;
+  padding: 0.5rem 0.8rem;
+}
+
+.audit-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.audit-table-wrap {
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.audit-table th,
+.audit-table td {
+  padding: 0.7rem 0.8rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  text-align: left;
+  vertical-align: top;
+  font-size: 0.82rem;
+}
+
+.audit-table th {
+  position: sticky;
+  top: 0;
+  background: #131316;
+  color: #c9d0db;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  z-index: 1;
+}
+
+.audit-table td {
+  color: #edf2f8;
+}
+
+.audit-table td:last-child {
+  max-width: 420px;
+  overflow-wrap: anywhere;
+  color: #bfc7d2;
 }

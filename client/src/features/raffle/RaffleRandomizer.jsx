@@ -3,6 +3,7 @@ import { SlotMachine } from './SlotMachine';
 import { OrbitDrawMachine } from './OrbitDrawMachine';
 import { drawWinner, mapEntryIds } from './raffle.logic';
 import { addWinnerForEvent, clearWinnersForEvent, fetchAllEventEntries, getWinnersForEvent } from './raffle.service';
+import { appendEventAudit } from '@/features/entry-upload/entryUpload.service';
 
 const IconTrophy = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#ff8c00', display: 'inline' }}>
@@ -16,7 +17,7 @@ const IconStar = () => (
   </svg>
 );
 
-export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, onSpinStateChange }) => {
+export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, onSpinStateChange, onAuditChange }) => {
   const [entries, setEntries] = useState([]);
   const [winners, setWinners] = useState([]);
   const [error, setError] = useState('');
@@ -24,6 +25,7 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
   const [isSpinning, setIsSpinning] = useState(false);
   const [spinComplete, setSpinComplete] = useState(false);
   const [pendingWinner, setPendingWinner] = useState(null);
+  const [redrawContext, setRedrawContext] = useState(null);
   const [auditVisible, setAuditVisible] = useState(true);
   const [showWinnerPopup, setShowWinnerPopup] = useState(false);
   const [drawDurationSec, setDrawDurationSec] = useState(4);
@@ -92,17 +94,55 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
     onSpinStateChange?.(isSpinning);
   }, [isSpinning, onSpinStateChange]);
 
-  const preselectWinner = () => {
-    const result = drawWinner(entries, excludedWinnerIds);
+  const writeAudit = async (action, details = {}) => {
+    if (!selectedEvent?.id) return;
+    try {
+      await appendEventAudit({ eventId: selectedEvent.id, action, details });
+      onAuditChange?.();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const preselectWinner = async (redraw = null) => {
+    const excluded = redraw?.originalWinner?.entry?.id
+      ? new Set([...excludedWinnerIds, redraw.originalWinner.entry.id])
+      : excludedWinnerIds;
+    const result = drawWinner(entries, excluded);
     const winnerLock = { winner: result.winner, fingerprint: result.fingerprint, preselectedAt: new Date().toISOString() };
 
     setPendingWinner(winnerLock);
+    setRedrawContext(redraw);
     setSpinComplete(false);
     setIsSpinning(true);
     setShowWinnerPopup(false);
     setError('');
 
     console.info(`Winner pre-selected: ${winnerLock.winner.employeeId} | Draw fingerprint: ${winnerLock.fingerprint}`);
+    await writeAudit(redraw ? 'redraw_logged' : 'draw_initiated', redraw ? {
+      reason: redraw.reason,
+      originalWinner: {
+        id: redraw.originalWinner.entry.id,
+        employeeId: redraw.originalWinner.entry.employeeId,
+        fullName: redraw.originalWinner.entry.fullName,
+        drawnAt: redraw.originalWinner.drawnAt,
+        fingerprint: redraw.originalWinner.fingerprint
+      },
+      newWinner: {
+        id: winnerLock.winner.id,
+        employeeId: winnerLock.winner.employeeId,
+        fullName: winnerLock.winner.fullName
+      },
+      newFingerprint: winnerLock.fingerprint
+    } : {
+      eligibleCount: result.eligibleCount,
+      winner: {
+        id: winnerLock.winner.id,
+        employeeId: winnerLock.winner.employeeId,
+        fullName: winnerLock.winner.fullName
+      },
+      fingerprint: winnerLock.fingerprint
+    });
   };
 
   const handleSpinComplete = () => {
@@ -111,7 +151,7 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
     setShowWinnerPopup(true);
   };
 
-  const confirmWinner = () => {
+  const confirmWinner = async () => {
     if (!pendingWinner || !selectedEvent?.id) return;
 
     const winnerRecord = {
@@ -122,18 +162,40 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
 
     const next = addWinnerForEvent(selectedEvent.id, winnerRecord);
     setWinners(next);
+    await writeAudit('winner_confirmed', {
+      winner: {
+        id: pendingWinner.winner.id,
+        employeeId: pendingWinner.winner.employeeId,
+        fullName: pendingWinner.winner.fullName,
+        entryCode: pendingWinner.winner.entryCode
+      },
+      fingerprint: pendingWinner.fingerprint,
+      confirmedAt: winnerRecord.drawnAt,
+      redrawReason: redrawContext?.reason || null
+    });
     setPendingWinner(null);
+    setRedrawContext(null);
     setSpinComplete(false);
     setShowWinnerPopup(false);
   };
 
-  const onReset = () => {
+  const handleRedrawLastWinner = () => {
+    const originalWinner = winners[0];
+    if (!originalWinner || isSpinning) return;
+    const reason = window.prompt('Reason for redraw');
+    if (!reason?.trim()) return;
+    preselectWinner({ originalWinner, reason: reason.trim() });
+  };
+
+  const onReset = async () => {
     if (!selectedEvent?.id) return;
     setWinners(clearWinnersForEvent(selectedEvent.id));
     setPendingWinner(null);
+    setRedrawContext(null);
     setSpinComplete(false);
     setIsSpinning(false);
     setShowWinnerPopup(false);
+    await writeAudit('winners_reset', { clearedAt: new Date().toISOString() });
   };
 
   if (!selectedEvent) {
@@ -196,11 +258,12 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
         )}
 
         <div className="raffle-action-row">
-          <button type="button" className="btn-primary action-btn spin-btn" onClick={preselectWinner} disabled={spinDisabled}>
+          <button type="button" className="btn-primary action-btn spin-btn" onClick={() => preselectWinner()} disabled={spinDisabled}>
             {spinIsPreparing && <span className="button-spinner" aria-hidden="true" />}
             {spinLabel}
           </button>
           {spinComplete && pendingWinner && <button type="button" className="btn-primary action-btn claim-btn" onClick={confirmWinner}>CLAIM / CONFIRM WINNER</button>}
+          <button type="button" className="btn-ghost" onClick={handleRedrawLastWinner} disabled={isSpinning || winners.length === 0 || eligibleEntries.length === 0}>Redraw Last Winner</button>
           <button type="button" className="btn-ghost" onClick={onReset} disabled={isSpinning}>Reset Winners</button>
         </div>
 
@@ -208,6 +271,7 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
           <div className="audit-panel">
             <p className="card-subheading">Audit</p>
             <p className="card-copy">Winner pre-selected: <strong>{pendingWinner.winner.employeeId}</strong><br />Draw fingerprint: <code>{pendingWinner.fingerprint}</code></p>
+            {redrawContext?.reason && <p className="tiny-copy">Redraw reason: {redrawContext.reason}</p>}
             <p className="tiny-copy">Preselected at: {new Date(pendingWinner.preselectedAt).toLocaleString()}</p>
           </div>
         )}
