@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SlotMachine } from './SlotMachine';
 import { drawWinner, mapEntryIds } from './raffle.logic';
-import { addWinnerForEvent, clearWinnersForEvent, fetchAllEventEntries, getWinnersForEvent } from './raffle.service';
+import { addWinnerForEvent, clearWinnersForEvent, fetchAllEventEntries, getWinnersForEvent, confirmWinnerOnServer } from './raffle.service';
 import { appendEventAudit } from '@/features/entry-upload/entryUpload.service';
 
 const IconTrophy = () => (
@@ -214,19 +214,21 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
       fingerprint: pendingWinner.fingerprint
     };
 
+    try {
+      await confirmWinnerOnServer({
+        eventId: selectedEvent.id,
+        entryId: pendingWinner.winner.id,
+        fingerprint: pendingWinner.fingerprint,
+        redrawReason: redrawContext?.reason || null
+      });
+    } catch (err) {
+      setError(err.message);
+      return;
+    }
+
     const next = addWinnerForEvent(selectedEvent.id, winnerRecord);
     setWinners(next);
-    await writeAudit('winner_confirmed', {
-      winner: {
-        id: pendingWinner.winner.id,
-        employeeId: pendingWinner.winner.employeeId,
-        fullName: pendingWinner.winner.fullName,
-        entryCode: pendingWinner.winner.entryCode
-      },
-      fingerprint: pendingWinner.fingerprint,
-      confirmedAt: winnerRecord.drawnAt,
-      redrawReason: redrawContext?.reason || null
-    });
+    onAuditChange?.();
     setPendingWinner(null);
     setRedrawContext(null);
     setSpinComplete(false);

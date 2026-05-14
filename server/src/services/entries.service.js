@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import prisma from '../prisma.js';
 import { progressMap } from './progress.service.js';
+import { findOrCreateParticipantFromEntry, getExcludedEmployeeIds } from './participants.service.js';
 
 const QUERY_CHUNK_SIZE = 5000;
 const INSERT_CHUNK_SIZE = 1500;
@@ -82,6 +83,17 @@ export function buildEntryRowsWithoutDuplicates(rows, existingCodes, existingEmp
   });
 }
 
+export async function filterExcludedRows(rows) {
+  const excluded = await getExcludedEmployeeIds(rows.map((r) => r.employeeId));
+  const accepted = [];
+  const skipped = [];
+  for (const row of rows) {
+    if (excluded.has(row.employeeId)) skipped.push({ ...row, reason: 'participant_excluded' });
+    else accepted.push(row);
+  }
+  return { accepted, skipped };
+}
+
 export async function processEntryUpload(uploadId, batchId, eventId, rowsToInsert, errorRows, totalFileRows) {
   const progress = progressMap.get(uploadId);
   if (!progress) return;
@@ -91,17 +103,29 @@ export async function processEntryUpload(uploadId, batchId, eventId, rowsToInser
 
   for (let start = 0; start < rowsToInsert.length; start += INSERT_CHUNK_SIZE) {
     const chunk = rowsToInsert.slice(start, start + INSERT_CHUNK_SIZE);
-    const mapped = chunk.map((row) => ({
-      id: randomUUID(),
-      eventId,
-      uploadBatchId: batchId,
-      employeeId: row.employeeId,
-      fullName: row.fullName,
-      department: row.department,
-      email: row.email,
-      entryCode: row.entryCode
-    }));
-    const result = await prisma.entry.createMany({ data: mapped, skipDuplicates: true });
+
+    const enriched = [];
+    for (const row of chunk) {
+      const participant = await findOrCreateParticipantFromEntry({
+        employeeId: row.employeeId,
+        fullName: row.fullName,
+        email: row.email,
+        department: row.department
+      });
+      enriched.push({
+        id: randomUUID(),
+        eventId,
+        uploadBatchId: batchId,
+        employeeId: row.employeeId,
+        fullName: row.fullName,
+        department: row.department,
+        email: row.email,
+        entryCode: row.entryCode,
+        participantId: participant?.id ?? null
+      });
+    }
+
+    const result = await prisma.entry.createMany({ data: enriched, skipDuplicates: true });
     insertedTotal += result.count ?? 0;
     progress.processed = start + chunk.length;
     progress.inserted = insertedTotal;

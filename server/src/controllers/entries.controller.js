@@ -10,8 +10,10 @@ import {
   findExistingEntryEmployeeIds,
   findExistingEntryEmails,
   buildEntryRowsWithoutDuplicates,
+  filterExcludedRows,
   processEntryUpload
 } from '../services/entries.service.js';
+import { findOrCreateParticipantFromEntry, getExcludedEmployeeIds } from '../services/participants.service.js';
 
 const REQUIRED_ENTRY_FIELDS = ['employeeId', 'fullName', 'department', 'email', 'entryCode'];
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -125,9 +127,18 @@ async function continueEntryUpload({ uploadId, eventId, rows, duplicateMode, rev
     data: { eventId, status: 'processing', totalRows: rows.length }
   });
 
-  const rowsToInsert = uploadWithDuplicates
+  const dedupedRows = uploadWithDuplicates
     ? validRows
     : buildEntryRowsWithoutDuplicates(validRows, existingCodes, existingEmployeeIds, existingEmails);
+
+  const { accepted: rowsToInsert, skipped: excludedRows } = await filterExcludedRows(dedupedRows);
+  if (excludedRows.length > 0) {
+    await appendAuditLog({
+      eventId,
+      action: 'entries_blocked_by_exclusion',
+      details: { uploadId, count: excludedRows.length, employeeIds: excludedRows.map((r) => r.employeeId) }
+    });
+  }
 
   await appendAuditLog({
     eventId,
@@ -356,6 +367,11 @@ export async function createEntry(req, res) {
     const event = await prisma.event.findUnique({ where: { id: eventId } });
     if (!event) return res.status(404).json({ error: 'Event not found.' });
 
+    const excluded = await getExcludedEmployeeIds([employeeId]);
+    if (excluded.has(employeeId)) {
+      return res.status(409).json({ error: 'This participant is excluded from raffles.', duplicateField: 'participant' });
+    }
+
     // Check for duplicates
     const existing = await prisma.entry.findFirst({
       where: {
@@ -389,6 +405,8 @@ export async function createEntry(req, res) {
       }
     });
 
+    const participant = await findOrCreateParticipantFromEntry({ employeeId, fullName, email, department });
+
     // Create the entry
     const entry = await prisma.entry.create({
       data: {
@@ -398,7 +416,8 @@ export async function createEntry(req, res) {
         fullName,
         department,
         email,
-        entryCode
+        entryCode,
+        participantId: participant?.id ?? null
       }
     });
 
