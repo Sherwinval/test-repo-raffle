@@ -40,10 +40,12 @@ export const startSlotMachineAnimation = ({
 }) => {
   const winnerChars = toDisplayDigits(winner, reelCount);
   const startTime = performance.now();
+  const totalStaggerMs = (reelCount - 1) * staggerMs;
+  const perReelBaseMs = Math.max(totalDurationMs - totalStaggerMs, staggerMs);
 
   const reels = Array.from({ length: reelCount }, (_, index) => ({
     index,
-    stopTime: startTime + totalDurationMs + index * staggerMs,
+    stopTime: startTime + perReelBaseMs + index * staggerMs,
     frozen: false,
     finalRows: []
   }));
@@ -56,7 +58,7 @@ export const startSlotMachineAnimation = ({
 
     const reelRows = reels.map((reel) => {
       const remaining = reel.stopTime - time;
-      const progress = Math.min(1, Math.max(0, (totalDurationMs - remaining) / totalDurationMs));
+      const progress = Math.min(1, Math.max(0, (perReelBaseMs - remaining) / perReelBaseMs));
       const eased = easeOutCubic(progress);
 
       if (time >= reel.stopTime) {

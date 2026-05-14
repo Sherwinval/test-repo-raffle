@@ -41,7 +41,6 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
   const [showWinnerPopup, setShowWinnerPopup] = useState(false);
   const [drawDurationSec, setDrawDurationSec] = useState(4);
   const [isFullScreen, setIsFullScreen] = useState(false);
-  const [isStopping, setIsStopping] = useState(false);
   const containerRef = useRef(null);
 
   const uploadStatus = uploadState?.status || 'idle';
@@ -88,7 +87,7 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
   const spinIsPreparing = uploadIsActive || isLoadingEntries;
   const spinDisabled = isSpinning || spinIsPreparing || eligibleEntries.length === 0;
   const spinLabel = isSpinning
-    ? isStopping ? 'STOPPING...' : 'SPINNING...'
+    ? 'SPINNING...'
     : uploadIsActive
       ? 'PREPARING ENTRIES...'
       : isLoadingEntries
@@ -179,9 +178,7 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
       if (e.code === 'Space') {
         e.preventDefault();
         if (isSpinning) {
-          if (!isStopping) {
-            setIsStopping(true);
-          }
+          return;
         } else if (spinComplete) {
           confirmWinner();
         } else if (eligibleEntries.length > 0 && !spinIsPreparing) {
@@ -200,7 +197,6 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
 
   const handleSpinComplete = () => {
     setIsSpinning(false);
-    setIsStopping(false);
     setSpinComplete(true);
     setShowWinnerPopup(true);
   };
@@ -250,7 +246,6 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
     setRedrawContext(null);
     setSpinComplete(false);
     setIsSpinning(false);
-    setIsStopping(false);
     setShowWinnerPopup(false);
     await writeAudit('winners_reset', { clearedAt: new Date().toISOString() });
   };
@@ -294,7 +289,6 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
         <SlotMachine
           winner={pendingWinner?.winner?.employeeId || eligibleIds[0] || '---'}
           isSpinning={isSpinning}
-          isStopping={isStopping}
           onSpinComplete={handleSpinComplete}
           reelCount={7}
           visibleRows={5}
