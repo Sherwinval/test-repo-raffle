@@ -3,6 +3,16 @@ import { buildFilePreview } from '@/utils/fileParser';
 import { validateUploadFile } from '@/utils/validators';
 
 export const getProgressPercent = (progress) => {
+  if (progress?.status === 'done') return 100;
+  if (progress?.status === 'reconnecting') {
+    return getProgressPercent({ ...progress, status: progress.priorStatus });
+  }
+  if (progress?.status === 'saving' && progress?.total) {
+    return Math.min(98, Math.round(60 + (progress.processed / progress.total) * 38));
+  }
+  if (progress?.status === 'validating' || progress?.status === 'duplicate-confirmation' || progress?.status === 'needs-review') return 55;
+  if (progress?.status === 'parsing' || progress?.status === 'pending') return 35;
+  if (progress?.status === 'uploading') return 15;
   if (!progress?.total) return 0;
   return Math.min(100, Math.round((progress.processed / progress.total) * 100));
 };

@@ -5,19 +5,28 @@ function currentStage(status) {
   if (status === 'error') return 'Error';
   if (status === 'canceled') return 'Canceled';
   if (status === 'canceling') return 'Canceling';
-  if (status === 'processing') return 'Saving';
+  if (status === 'reconnecting') return null;
+  if (status === 'saving' || status === 'processing') return 'Saving';
+  if (status === 'validating' || status === 'duplicate-confirmation' || status === 'needs-review') return 'Validating';
   if (status === 'pending') return 'Parsing';
+  if (status === 'parsing') return 'Parsing';
   return 'Uploading';
 }
 
 export default function UploadProgress({ progress, displayProgress }) {
-  const stage = currentStage(progress.status);
+  const stage = progress.status === 'reconnecting'
+    ? currentStage(progress.priorStatus) || 'Uploading'
+    : currentStage(progress.status);
   const isDone = progress.status === 'done';
   const isError = progress.status === 'error';
   const isCanceled = progress.status === 'canceled';
   const isCanceling = progress.status === 'canceling';
+  const isReconnecting = progress.status === 'reconnecting';
+  const needsDuplicateChoice = progress.status === 'duplicate-confirmation';
+  const needsIssueReview = progress.status === 'needs-review';
 
   const stageIndex = STAGES.indexOf(stage);
+  const percent = isDone ? 100 : Math.max(0, Math.min(100, Math.round(displayProgress || 0)));
 
   return (
     <div className={`soft-card upload-progress-card${isError ? ' upload-progress-card--error' : ''}${isCanceled || isCanceling ? ' upload-progress-card--canceled' : ''}`}>
@@ -26,12 +35,19 @@ export default function UploadProgress({ progress, displayProgress }) {
           <p className="card-heading">Upload status</p>
           <div className="stage-track">
             {STAGES.map((s, i) => (
+              (() => {
+                const complete = i < stageIndex || isDone;
+                const active = s === stage && !isDone;
+                const className = `stage-dot${complete ? ' stage-dot--done' : ''}${active ? ' stage-dot--active' : ''}`;
+                return (
               <span
                 key={s}
-                className={`stage-dot${i < stageIndex || isDone ? ' stage-dot--done' : ''}${s === stage && !isDone ? ' stage-dot--active' : ''}`}
+                className={className}
               >
                 {s}
               </span>
+                );
+              })()
             ))}
           </div>
           {isError && progress.error && (
@@ -39,6 +55,15 @@ export default function UploadProgress({ progress, displayProgress }) {
           )}
           {isCanceling && (
             <p className="tiny-copy" style={{ color: '#92400e', marginTop: '0.25rem' }}>Canceling upload and removing saved rows...</p>
+          )}
+          {needsDuplicateChoice && (
+            <p className="tiny-copy" style={{ color: '#92400e', marginTop: '0.25rem' }}>Duplicates found. Choose how to continue.</p>
+          )}
+          {needsIssueReview && (
+            <p className="tiny-copy" style={{ color: '#92400e', marginTop: '0.25rem' }}>Some rows need review before saving.</p>
+          )}
+          {isReconnecting && (
+            <p className="tiny-copy" style={{ color: '#92400e', marginTop: '0.25rem' }}>{progress.error || 'Reconnecting to upload progress...'}</p>
           )}
           {isCanceled && (
             <p className="tiny-copy" style={{ color: '#92400e', marginTop: '0.25rem' }}>Upload canceled. Saved rows from this batch were removed.</p>
@@ -58,7 +83,8 @@ export default function UploadProgress({ progress, displayProgress }) {
         </div>
       </div>
       <div className="progress-track" style={{ marginTop: '1rem' }}>
-        <div className="progress-fill" style={{ width: `${isDone ? 100 : displayProgress}%` }} />
+        <div className="progress-fill" style={{ width: `${percent}%` }} />
+        <span className="progress-percent">{percent}%</span>
       </div>
     </div>
   );

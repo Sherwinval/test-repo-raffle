@@ -2,6 +2,24 @@ import { useEffect, useRef, useState } from 'react';
 
 const PAGE_SIZE = 50;
 
+const IconSearch = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+  </svg>
+);
+
+const IconInbox = () => (
+  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#555' }}>
+    <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/>
+  </svg>
+);
+
+const IconLoader = () => (
+  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="spin-icon" style={{ color: '#ff8c00' }}>
+    <line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/>
+  </svg>
+);
+
 export default function EntriesTable({ eventId, refreshKey }) {
   const [entries, setEntries] = useState([]);
   const [total, setTotal] = useState(0);
@@ -14,7 +32,6 @@ export default function EntriesTable({ eventId, refreshKey }) {
   const [loading, setLoading] = useState(false);
   const debounceRef = useRef(null);
 
-  // Reset to page 1 whenever filters change
   useEffect(() => {
     setPage(1);
   }, [search, department, eventId]);
@@ -67,11 +84,11 @@ export default function EntriesTable({ eventId, refreshKey }) {
 
       <div className="entries-controls">
         <div className="search-wrap">
-          <span className="search-icon" aria-hidden="true">⌕</span>
+          <span className="search-icon"><IconSearch /></span>
           <input
             type="search"
             className="entries-search"
-            placeholder="Search name, ID, email, or entry code…"
+            placeholder="Search name, ID, email, or entry code..."
             value={searchInput}
             onChange={handleSearchChange}
           />
@@ -97,12 +114,12 @@ export default function EntriesTable({ eventId, refreshKey }) {
 
       {loading && entries.length === 0 ? (
         <div className="entries-state">
-          <span className="entries-state-icon">⋯</span>
-          <p>Loading entries…</p>
+          <IconLoader />
+          <p>Loading entries...</p>
         </div>
       ) : entries.length === 0 ? (
         <div className="entries-state">
-          <span className="entries-state-icon">○</span>
+          <IconInbox />
           <p>{hasActiveFilter ? 'No entries match your search.' : 'No entries uploaded yet.'}</p>
           {hasActiveFilter && (
             <button type="button" className="btn-ghost-sm" onClick={() => { setSearchInput(''); setSearch(''); setDepartment(''); }}>
@@ -155,7 +172,7 @@ export default function EntriesTable({ eventId, refreshKey }) {
               ← Prev
             </button>
             <span className="pagination-info">
-              {start.toLocaleString()}–{end.toLocaleString()} of {total.toLocaleString()}
+              {start.toLocaleString()}-{end.toLocaleString()} of {total.toLocaleString()}
             </span>
             <button
               type="button"

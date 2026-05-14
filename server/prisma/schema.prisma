@@ -24,6 +24,7 @@ model Event {
   createdAt DateTime      @default(now())
   entries   Entry[]
   batches   UploadBatch[]
+  auditLogs AuditLog[]
 }
 
 model UploadBatch {
@@ -53,4 +54,16 @@ model Entry {
   createdAt     DateTime    @default(now())
 
   @@unique([eventId, entryCode])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  eventId    String
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  action     String
+  operator   String
+  details    Json?
+  createdAt  DateTime @default(now())
+
+  @@index([eventId, createdAt])
 }

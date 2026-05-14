@@ -2,34 +2,61 @@ import { randomUUID } from 'crypto';
 import prisma from '../prisma.js';
 import { progressMap } from './progress.service.js';
 
+const QUERY_CHUNK_SIZE = 5000;
+const INSERT_CHUNK_SIZE = 1500;
+
+function uniqueValues(values) {
+  return Array.from(new Set((values || []).filter(Boolean)));
+}
+
+function chunkArray(values, size) {
+  const chunks = [];
+  for (let start = 0; start < values.length; start += size) {
+    chunks.push(values.slice(start, start + size));
+  }
+  return chunks;
+}
+
 export async function findExistingEntryCodes(eventId, codes) {
-  const unique = Array.from(new Set((codes || []).filter(Boolean)));
+  const unique = uniqueValues(codes);
   if (unique.length === 0) return [];
-  const existing = await prisma.entry.findMany({
-    where: { eventId, entryCode: { in: unique } },
-    select: { entryCode: true }
-  });
-  return existing.map((r) => r.entryCode);
+  const existing = await Promise.all(
+    chunkArray(unique, QUERY_CHUNK_SIZE).map((chunk) =>
+      prisma.entry.findMany({
+        where: { eventId, entryCode: { in: chunk } },
+        select: { entryCode: true }
+      })
+    )
+  );
+  return existing.flat().map((r) => r.entryCode);
 }
 
 export async function findExistingEntryEmployeeIds(eventId, employeeIds) {
-  const unique = Array.from(new Set((employeeIds || []).filter(Boolean)));
+  const unique = uniqueValues(employeeIds);
   if (unique.length === 0) return [];
-  const existing = await prisma.entry.findMany({
-    where: { eventId, employeeId: { in: unique } },
-    select: { employeeId: true }
-  });
-  return [...new Set(existing.map((r) => r.employeeId))];
+  const existing = await Promise.all(
+    chunkArray(unique, QUERY_CHUNK_SIZE).map((chunk) =>
+      prisma.entry.findMany({
+        where: { eventId, employeeId: { in: chunk } },
+        select: { employeeId: true }
+      })
+    )
+  );
+  return [...new Set(existing.flat().map((r) => r.employeeId))];
 }
 
 export async function findExistingEntryEmails(eventId, emails) {
-  const unique = Array.from(new Set((emails || []).filter(Boolean)));
+  const unique = uniqueValues(emails);
   if (unique.length === 0) return [];
-  const existing = await prisma.entry.findMany({
-    where: { eventId, email: { in: unique } },
-    select: { email: true }
-  });
-  return [...new Set(existing.map((r) => r.email))];
+  const existing = await Promise.all(
+    chunkArray(unique, QUERY_CHUNK_SIZE).map((chunk) =>
+      prisma.entry.findMany({
+        where: { eventId, email: { in: chunk } },
+        select: { email: true }
+      })
+    )
+  );
+  return [...new Set(existing.flat().map((r) => r.email))];
 }
 
 export function buildEntryRowsWithoutDuplicates(rows, existingCodes, existingEmployeeIds, existingEmails) {
@@ -58,13 +85,12 @@ export function buildEntryRowsWithoutDuplicates(rows, existingCodes, existingEmp
 export async function processEntryUpload(uploadId, batchId, eventId, rowsToInsert, errorRows, totalFileRows) {
   const progress = progressMap.get(uploadId);
   if (!progress) return;
-  progress.status = 'processing';
+  progress.status = 'saving';
 
-  const chunkSize = 500;
   let insertedTotal = 0;
 
-  for (let start = 0; start < rowsToInsert.length; start += chunkSize) {
-    const chunk = rowsToInsert.slice(start, start + chunkSize);
+  for (let start = 0; start < rowsToInsert.length; start += INSERT_CHUNK_SIZE) {
+    const chunk = rowsToInsert.slice(start, start + INSERT_CHUNK_SIZE);
     const mapped = chunk.map((row) => ({
       id: randomUUID(),
       eventId,
@@ -79,6 +105,7 @@ export async function processEntryUpload(uploadId, batchId, eventId, rowsToInser
     insertedTotal += result.count ?? 0;
     progress.processed = start + chunk.length;
     progress.inserted = insertedTotal;
+    progressMap.set(uploadId, { ...progress });
   }
 
   const skippedRows = totalFileRows - errorRows.length - insertedTotal;

@@ -51,6 +51,7 @@ export const uploadEntries = async ({ eventId, file, duplicateMode, signal }) =>
   const formData = new FormData();
   formData.append('file', file);
   if (duplicateMode) formData.append('duplicateMode', duplicateMode);
+  formData.append('operator', 'Raffle Operator');
 
   const res = await fetch(`/api/events/${eventId}/entries/upload`, {
     method: 'POST',
@@ -88,6 +89,19 @@ export const fetchUploadProgress = async (uploadId) => {
   return res.json();
 };
 
+export const resolveUploadIssues = async ({ uploadId, rows }) => {
+  const res = await fetch(`/api/upload/resolve/${uploadId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rows })
+  });
+  const body = await res.json();
+  if (!res.ok) {
+    throw new Error(body?.error || 'Failed to resolve upload issues.');
+  }
+  return body;
+};
+
 export const fetchEntryStats = async (eventId) => {
   const res = await fetch(`/api/events/${eventId}/entries/stats`);
   if (!res.ok) throw new Error('Failed to fetch entry count.');
@@ -102,4 +116,61 @@ export const fetchEntriesPage = async ({ eventId, page, pageSize, search = '', d
   const res = await fetch(`/api/events/${eventId}/entries?${params.toString()}`);
   if (!res.ok) throw new Error('Failed to fetch entries.');
   return res.json();
+};
+
+export const createEntry = async ({ eventId, employeeId, fullName, department, email, entryCode }) => {
+  const res = await fetch(`/api/events/${eventId}/entries`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ employeeId, fullName, department, email, entryCode, operator: 'Raffle Operator' })
+  });
+
+  if (res.status === 409) {
+    const body = await res.json();
+    throw new Error(body.error);
+  }
+
+  if (!res.ok) {
+    const body = await res.json();
+    throw new Error(body?.error || 'Failed to create entry.');
+  }
+
+  return res.json();
+};
+
+export const fetchEventAudit = async (eventId) => {
+  const res = await fetch(`/api/events/${eventId}/audit`);
+  if (!res.ok) throw new Error('Failed to fetch event audit log.');
+  return res.json();
+};
+
+export const appendEventAudit = async ({ eventId, action, operator = 'Raffle Operator', details = {} }) => {
+  const res = await fetch(`/api/events/${eventId}/audit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, operator, details })
+  });
+  if (!res.ok) {
+    const body = await res.json();
+    throw new Error(body?.error || 'Failed to write audit log.');
+  }
+  return res.json();
+};
+
+export const fetchAllEntriesForEvent = async (eventId) => {
+  const pageSize = 100;
+  let page = 1;
+  let totalPages = 1;
+  const all = [];
+
+  while (page <= totalPages) {
+    const res = await fetch(`/api/events/${eventId}/entries?page=${page}&pageSize=${pageSize}`);
+    if (!res.ok) throw new Error('Failed to load existing entries for duplicate checking.');
+    const data = await res.json();
+    all.push(...(data.entries || []));
+    totalPages = data.totalPages || 1;
+    page += 1;
+  }
+
+  return all;
 };
