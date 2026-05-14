@@ -22,16 +22,17 @@ Internal HR / People Ops team. Two roles: `Admin` and `Event Manager`.
 
 ### Admin
 - Full system access
-- Invite/revoke users (Admins and Event Managers)
-- Create/manage events; view all events across the system
-- Run all operational tasks: upload, draw, present, export
+- Invite/revoke users (Admins and Event Managers) admins cannot be lower than  2.
+- View events but dont manage events
+- export results of all events
 - View audit log; access system settings
 
 ### Event Manager
 - Create and manage their own events (full CRUD)
 - Run all operational tasks for owned + co-assigned events (upload, draw, present, export)
-- Add other Event Managers as collaborators on their own events
+- Add other Event Managers as collaborators on their own events iwht specific permission for example : if i add event manager B to my event i can give him permission to upload and draw but not to export results and also i can give him permission to export results but not to upload and draw 
 - Cannot manage users or access system settings
+- export results of assigned events only
 
 ### Account Creation
 - **No public signup.** Accounts exist only via invite from an Admin.
@@ -91,6 +92,11 @@ Branded draw UI for live event display.
 
 ### 6. Results & Export
 Post-draw result views and CSV/Excel export with full audit trail.
+
+### 6. Event branding customization
+
+### 6. Raffle style module
+
 
 ---
 
