@@ -10,7 +10,7 @@ import EntriesTable from '@/components/EntriesTable';
 import { getProgressPercent, validateEntryUploadSelection } from './entryUpload.logic';
 import { cancelUpload, fetchEntryStats, fetchUploadProgress, resolveUploadIssues, uploadEntries } from './entryUpload.service';
 
-const UPLOAD_PROGRESS_STORAGE_KEY = 'rafflehub:active-upload-progress';
+const UPLOAD_PROGRESS_STORAGE_KEY = 'rafdom:active-upload-progress';
 const ACTIVE_UPLOAD_STATUSES = new Set(['uploading', 'parsing', 'pending', 'validating', 'needs-review', 'saving', 'processing', 'canceling', 'reconnecting']);
 const FINISHED_UPLOAD_STATUSES = new Set(['done', 'error', 'canceled']);
 

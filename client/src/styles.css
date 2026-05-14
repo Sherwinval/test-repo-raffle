@@ -3536,3 +3536,367 @@ body,
   background: rgba(255, 140, 0, 0.1);
   transform: scale(1.1);
 }
+
+/* =========================================================
+   Event Dashboard Full Page Overhaul
+   ========================================================= */
+
+.event-dashboard-full {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 100%;
+  overflow-y: auto; /* Fix scrolling */
+  padding-right: 10px; /* Space for scrollbar */
+}
+
+.event-dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 0.5rem;
+}
+
+.event-dashboard-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.event-search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: #111214;
+  border: 1px solid #2d2d30;
+  border-radius: 8px;
+  padding: 0 0.75rem;
+  height: 2.25rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.event-search-wrapper:focus-within {
+  border-color: #ff8c00;
+  box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.1);
+}
+
+.event-search-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  color: #f8fafc;
+  width: 200px;
+}
+
+.event-filters-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+
+.event-sort-select {
+  border: 1px solid #2d2d30;
+  border-radius: 6px;
+  padding: 0.375rem 0.75rem;
+  background: #111214;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  color: #94a3b8;
+  cursor: pointer;
+  outline: none;
+}
+
+.event-sort-select:focus {
+  border-color: #ff8c00;
+}
+
+.event-list-header {
+  display: flex;
+  padding: 0 1.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  letter-spacing: 0.05em;
+}
+
+.event-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.event-card-row {
+  display: flex;
+  align-items: center;
+  background: #111214;
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  border: 1px solid #2d2d30;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.event-card-row:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3), 0 2px 4px -1px rgba(0,0,0,0.2);
+  border-color: #475569;
+}
+
+.event-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.event-card-title {
+  font-weight: 600;
+  font-size: 1rem;
+  color: #f8fafc;
+  margin: 0;
+}
+
+.event-card-desc {
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  margin: 0;
+  max-width: 90%;
+  line-height: 1.4;
+}
+
+.event-card-meta {
+  font-size: 0.875rem;
+  color: #cbd5e1;
+}
+
+.event-card-status-col {
+  display: flex;
+  align-items: center;
+}
+
+.event-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.event-status-pill.status-draft {
+  background: rgba(194, 65, 12, 0.15);
+  color: #fdba74;
+}
+
+.event-status-pill.status-draft .status-dot {
+  background: #f97316;
+}
+
+.event-status-pill.status-active {
+  background: rgba(21, 128, 61, 0.15);
+  color: #86efac;
+}
+
+.event-status-pill.status-active .status-dot {
+  background: #22c55e;
+}
+
+.event-status-pill.status-completed {
+  background: rgba(71, 85, 105, 0.2);
+  color: #cbd5e1;
+}
+
+.event-status-pill.status-completed .status-dot {
+  background: #94a3b8;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.btn-primary-sm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.375rem 0.875rem;
+  background: #ff8c00;
+  color: #000;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary-sm:hover:not(.btn-disabled) {
+  background: #e67e00;
+}
+
+.btn-disabled {
+  background: #334155;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.event-delete-icon {
+  color: #ef4444;
+  opacity: 0.5;
+}
+
+.event-delete-icon:hover {
+  opacity: 1;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.kpi-card {
+  padding: 1.25rem;
+  background: #111214;
+  border-radius: 12px;
+  border: 1px solid #2d2d30;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+/* Fix for top right new event button to match mockup */
+.event-dashboard-actions .btn-primary {
+  height: 2.25rem;
+  padding: 0 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+
+/* =========================================================
+   Sidebar Collapse Transitions
+   ========================================================= */
+
+.dashboard-shell {
+  transition: grid-template-columns 0.3s ease;
+}
+
+.dashboard-shell.collapsed {
+  grid-template-columns: 72px minmax(0, 1fr);
+}
+
+/* Brand block: always a flex row, space logo on left, button on right */
+.brand-block {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-height: 40px;
+  position: relative;
+  /* overflow must NOT be hidden – it clips the collapse button when collapsed */
+}
+
+/* Expanded RAFDOM name: visible when NOT collapsed */
+.brand-logo-wrap {
+  flex: 1;
+  min-width: 0;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.dashboard-shell.collapsed .brand-logo-wrap {
+  opacity: 0;
+  transform: translateX(-6px);
+  pointer-events: none;
+  position: absolute;
+}
+
+/* Collapsed RD text: hidden when expanded, shown when collapsed */
+.brand-logo-icon-text {
+  display: flex;
+  align-items: center;
+  font-family: 'Inter', sans-serif;
+  font-size: 1.25rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  margin: 0;
+  padding: 0;
+  flex-shrink: 0;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  opacity: 0;
+  transform: scale(0.7);
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+}
+
+.dashboard-shell.collapsed .brand-logo-icon-text {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+  position: static;
+}
+
+/* Collapse toggle button: always on the right */
+.sidebar-collapse-btn {
+  flex-shrink: 0;
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  padding: 5px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.sidebar-collapse-btn:hover {
+  background: #2d2d30;
+  color: #f8fafc;
+}
+
+/* When collapsed, center the collapse button */
+.dashboard-shell.collapsed .brand-block {
+  justify-content: center;
+}
+
+.dashboard-shell.collapsed .sidebar-collapse-btn {
+  margin-left: 0;
+}
+
+/* Hide text labels when collapsed */
+.sidebar-link span,
+.sidebar-label,
+.sidebar-user-name,
+.sidebar-user-role {
+  transition: opacity 0.2s ease;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.dashboard-shell.collapsed .sidebar-link span,
+.dashboard-shell.collapsed .sidebar-label,
+.dashboard-shell.collapsed .sidebar-user-name,
+.dashboard-shell.collapsed .sidebar-user-role {
+  opacity: 0;
+  max-width: 0;
+  pointer-events: none;
+}
+
+.dashboard-shell.collapsed .sidebar-link {
+  justify-content: center;
+  padding: 0.65rem;
+}
+
+.dashboard-shell.collapsed .sidebar-nav {
+  align-items: center;
+}
+
+.dashboard-shell.collapsed .sidebar-user {
+  justify-content: center;
+}

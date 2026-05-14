@@ -1,31 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SlotMachine } from './SlotMachine';
-import { OrbitDrawMachine } from './OrbitDrawMachine';
 import { drawWinner, mapEntryIds } from './raffle.logic';
 import { addWinnerForEvent, clearWinnersForEvent, fetchAllEventEntries, getWinnersForEvent } from './raffle.service';
 import { appendEventAudit } from '@/features/entry-upload/entryUpload.service';
 
 const IconTrophy = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#ff8c00', display: 'inline' }}>
-    <path d="M6 9H4.5a2.5 2.5 0 010-5H6"/><path d="M18 9h1.5a2.5 2.5 0 000-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 1012 0V2z"/>
+    <path d="M6 9H4.5a2.5 2.5 0 010-5H6" /><path d="M18 9h1.5a2.5 2.5 0 000-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 1012 0V2z" />
   </svg>
 );
 
 const IconStar = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="#ff8c00" stroke="#ff8c00" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline', verticalAlign: 'text-bottom' }}>
-    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
   </svg>
 );
 
 const IconMaximize = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+    <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
   </svg>
 );
 
 const IconMinimize = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M10 14l-7 7"/>
+    <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M10 14l-7 7" />
   </svg>
 );
 
@@ -38,10 +37,9 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
   const [spinComplete, setSpinComplete] = useState(false);
   const [pendingWinner, setPendingWinner] = useState(null);
   const [redrawContext, setRedrawContext] = useState(null);
-  const [auditVisible, setAuditVisible] = useState(true);
+  const [auditVisible, setAuditVisible] = useState(false);
   const [showWinnerPopup, setShowWinnerPopup] = useState(false);
   const [drawDurationSec, setDrawDurationSec] = useState(4);
-  const [raffleStyle, setRaffleStyle] = useState('classic');
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const containerRef = useRef(null);
@@ -291,34 +289,15 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
           <input id="draw-duration" type="range" min="2" max="12" step="1" value={drawDurationSec} onChange={(e) => setDrawDurationSec(Number(e.target.value))} disabled={isSpinning} className="draw-duration-slider" style={{ '--slider-percent': `${((drawDurationSec - 2) / 10) * 100}%` }} />
         </div>
 
-        <div className="draw-duration-wrap">
-          <label htmlFor="raffle-style" className="field-label">Raffle Style</label>
-          <select id="raffle-style" className="entries-filter" value={raffleStyle} onChange={(e) => setRaffleStyle(e.target.value)} disabled={isSpinning}>
-            <option value="classic">Classic Digit Slot</option>
-            <option value="orbit">Orbit Draw</option>
-          </select>
-        </div>
-
-        {raffleStyle === 'orbit' ? (
-          <OrbitDrawMachine
-            entries={eligibleIds}
-            winner={pendingWinner?.winner?.employeeId || eligibleIds[0] || '0000000'}
-            isSpinning={isSpinning}
-            isPaused={isPaused}
-            onSpinComplete={handleSpinComplete}
-            spinDurationMs={drawDurationSec * 1000}
-          />
-        ) : (
-          <SlotMachine
-            winner={pendingWinner?.winner?.employeeId || eligibleIds[0] || '---'}
-            isSpinning={isSpinning}
-            isStopping={isStopping}
-            onSpinComplete={handleSpinComplete}
-            reelCount={7}
-            visibleRows={5}
-            spinDurationMs={drawDurationSec * 1000}
-          />
-        )}
+        <SlotMachine
+          winner={pendingWinner?.winner?.employeeId || eligibleIds[0] || '---'}
+          isSpinning={isSpinning}
+          isStopping={isStopping}
+          onSpinComplete={handleSpinComplete}
+          reelCount={7}
+          visibleRows={5}
+          spinDurationMs={drawDurationSec * 1000}
+        />
 
         <div className="raffle-action-row">
           <button type="button" className="btn-primary action-btn spin-btn" onClick={() => preselectWinner()} disabled={spinDisabled}>
