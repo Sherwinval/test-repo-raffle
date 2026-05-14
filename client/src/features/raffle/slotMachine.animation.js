@@ -1,12 +1,12 @@
 const DEFAULT_TOTAL_DURATION_MS = 3600;
 const DEFAULT_STAGGER_MS = 450;
 
-const easeOutCubic = (t) => 1 - ((1 - t) ** 3);
+export const easeOutCubic = (t) => 1 - ((1 - t) ** 3);
 const safeModulo = (value, length) => ((value % length) + length) % length;
 
-const DIGIT_POOL = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+export const DIGIT_POOL = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
-const buildReelRows = (pool, centerValue, visibleRows, offsetSeed) => {
+export const buildReelRows = (pool, centerValue, visibleRows, offsetSeed) => {
   const half = (visibleRows - 1) / 2;
   const centerIndex = pool.indexOf(centerValue);
   const baseIndex = centerIndex >= 0 ? centerIndex : safeModulo(offsetSeed, pool.length);
@@ -18,7 +18,7 @@ const buildReelRows = (pool, centerValue, visibleRows, offsetSeed) => {
   });
 };
 
-const pickDisplayCenter = (pool, reelIndex, tick) => {
+export const pickDisplayCenter = (pool, reelIndex, tick) => {
   const seed = (reelIndex + 1) * 37 + tick * 17;
   return pool[safeModulo(seed, pool.length)];
 };
