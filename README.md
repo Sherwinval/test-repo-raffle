@@ -1,66 +1,123 @@
 ﻿# Entry Upload + Raffle Management
 
-## Updated Frontend Structure
+A full-stack internal raffle system for event-based participant upload, duplicate-safe entry ingestion, and secure draw management.
 
-```text
-client/src
-  App.jsx
-  main.jsx
-  features/
-    entry-upload/
-      EntryUpload.jsx
-      entryUpload.logic.js
-      entryUpload.service.js
-    raffle/
-      RaffleRandomizer.jsx
-      raffle.logic.js
-      raffle.service.js
-  components/
-    TabNavigator.jsx
-    ui/
-      EntriesTable.jsx
-      EventSelector.jsx
-  utils/
-    cryptoRandom.js
-    fileParser.js
-    validators.js
-  hooks/
-  constants/
-    app.constants.js
-  styles/
-    global.css
+## Project Scope
+
+- Frontend: React + Vite + Tailwind CSS
+- Backend: Node.js + Express
+- ORM: Prisma
+- Database: PostgreSQL (Supabase)
+- Upload support: CSV / Excel
+- Roles: `ADMIN` and `EVENT_MANAGER`
+
+## Features
+
+- Event-driven entry upload with duplicate detection
+- Bulk import for 20,000+ rows
+- Progress tracking during upload and validation
+- Secure, auditable raffle/draw logic
+- Role-based authorization and event access control
+- Export-ready result handling
+
+## Repository Structure
+
+- `client/` — React application
+  - `src/` — UI, features, utilities, styles
+  - `public/` — static assets
+- `server/` — Express API and Prisma data model
+  - `src/` — controllers, services, routes, middleware, config
+  - `prisma/` — schema and migrations
+
+## Setup
+
+### Prerequisites
+
+- Node.js 20+ (or compatible)
+- npm
+- PostgreSQL / Supabase database
+
+### Install dependencies
+
+```bash
+cd client && npm install
+cd ../server && npm install
 ```
 
-## Conventions
+### Environment
 
-- `main.jsx` is bootstrap-only and must not include feature logic.
-- Feature folders own their UI (`.jsx`), logic (`.logic.js`), and external calls (`.service.js`).
-- Shared helpers are placed under `components`, `utils`, `hooks`, and `constants`.
-- Path alias `@` points to `client/src` (configured in `client/vite.config.js`).
-- Named exports are used across the new modules.
+The backend uses environment variables stored in `server/.env`.
+Required values include:
 
-## Tabs
+- `DATABASE_URL`
+- `DIRECT_URL`
+- `NODE_ENV`
+- `PORT`
+- `WEB_ORIGIN`
 
-- `Entry Upload`: event selection, file selection, duplicate confirmation, upload progress, and entry preview table.
-- `Raffle Randomizer`: loads event entries, draws winners, excludes already drawn winners, and supports reset.
+> `server/.env` is already configured for local development in this workspace.
 
-## Randomizer Algorithm (No Math.random / Math.floor)
+## Running the Application
 
-`utils/cryptoRandom.js` uses `crypto.getRandomValues()` with rejection sampling:
+### Start both client and server
 
-1. Generate a 32-bit random integer from Web Crypto.
-2. Reject values in the modulo-bias range.
-3. Use `value % maxExclusive` as the uniform index.
-4. Generate an entropy fingerprint (`hex`) for each draw for auditability.
+From the repository root:
 
-This keeps winner selection fair and reproducible at the audit level (via fingerprint records).
+```bash
+npm run dev
+```
 
-## Adding a New Feature
+This runs:
 
-1. Create `client/src/features/<feature-name>/`.
-2. Add:
-   - `<FeatureName>.jsx`
-   - `<featureName>.logic.js`
-   - `<featureName>.service.js`
-3. Add shared UI in `client/src/components/ui` only if reusable.
-4. Wire feature into `App.jsx` tabs or route shell.
+- `client`: `npm run dev`
+- `server`: `npm run dev`
+
+### Run client only
+
+```bash
+cd client && npm run dev
+```
+
+### Run server only
+
+```bash
+cd server && npm run dev
+```
+
+## Development Notes
+
+### Client
+
+- `client/src/App.jsx` is the entry point for UI navigation and feature composition
+- `client/src/features/` contains feature-specific UI, logic, and service code
+- `client/src/utils/` contains shared helpers such as file parsing and validation
+
+### Server
+
+- `server/src/index.js` boots Express
+- `server/src/routes/` defines API endpoints
+- `server/src/controllers/` handles request flows
+- `server/src/services/` contains business logic
+- `server/src/middleware/` enforces auth, validation, and error handling
+
+### Prisma
+
+Server schema and migrations are managed in `server/prisma/`.
+
+Common commands:
+
+```bash
+cd server
+npm run prisma migrate:deploy
+npm run prisma:validate
+```
+
+## Notes
+
+- Upload processing is designed to support large CSV/Excel imports and avoid duplicate `entry_code` collisions.
+- Event access is enforced at the API layer for `EVENT_MANAGER` and `ADMIN` roles.
+- The UI includes a dedicated entry upload flow and a raffle draw flow with secure randomization.
+
+## Contact
+
+For questions or next steps, open `ProjectOverview.md` or inspect the `server` and `client` folders for implementation details.
