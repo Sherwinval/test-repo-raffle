@@ -1,172 +1,61 @@
-import prisma from '../prisma.js';
+import { randomUUID } from 'crypto';
+import Event from '../models/Event.js';
+import Entry from '../models/Entry.js';
+import Participant from '../models/Participant.js';
+import Winner from '../models/Winner.js';
+import UploadBatch from '../models/UploadBatch.js';
+import Notification from '../models/Notification.js';
+import AuditLog from '../models/AuditLog.js';
+import BrandAsset from '../models/BrandAsset.js';
 import { appendAuditLog, listAuditLogs } from '../services/audit.service.js';
 
 export async function listEvents(_req, res) {
   try {
-    const events = await prisma.event.findMany({
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        createdAt: true,
-        _count: { select: { entries: true } }
-      }
-    });
-
-    const mappedEvents = events.map((event) => ({
-      id: event.id,
-      name: event.name,
-      createdAt: event.createdAt,
-      entriesCount: event._count.entries,
-      status: event.status
-    }));
-
-    res.json(mappedEvents);
-  } catch (err) {
-    console.error('Events query failed:', err);
-    res.status(500).json({ error: 'Failed to fetch events.' });
-  }
+    const events = await Event.find({}).sort({ createdAt: -1 }).lean();
+    const counts = await Entry.aggregate([{ $group: { _id: '$eventId', count: { $sum: 1 } } }]);
+    const countMap = new Map(counts.map((c) => [c._id, c.count]));
+    res.json(events.map((e) => ({ id: e._id, name: e.name, createdAt: e.createdAt, entriesCount: countMap.get(e._id) || 0, status: e.status })));
+  } catch { res.status(500).json({ error: 'Failed to fetch events.' }); }
 }
 
 export async function createEvent(req, res) {
-  const name = String(req.body?.name || '').trim();
-  if (!name) return res.status(400).json({ error: 'Event name is required.' });
-  try {
-    const event = await prisma.event.create({ data: { name } });
-    await appendAuditLog({
-      eventId: event.id,
-      action: 'event_created',
-      operator: req.body?.operator,
-      details: { eventName: event.name }
-    });
-    res.status(201).json(event);
-  } catch (err) {
-    console.error('Event create failed:', err);
-    res.status(500).json({ error: 'Failed to create event.' });
-  }
+  const name = String(req.body?.name || '').trim(); if (!name) return res.status(400).json({ error: 'Event name is required.' });
+  try { const event = await Event.create({ _id: randomUUID(), name, status: 'Draft' }); await appendAuditLog({ eventId: event._id, action: 'event_created', operator: req.body?.operator, details: { eventName: event.name } }); res.status(201).json({ ...event.toObject(), id: event._id }); } catch { res.status(500).json({ error: 'Failed to create event.' }); }
 }
 
 export async function publishEvent(req, res) {
   const { eventId } = req.params;
-  try {
-    const event = await prisma.event.update({
-      where: { id: eventId },
-      data: { status: 'Active' }
-    });
-
-    await appendAuditLog({
-      eventId,
-      action: 'event_published',
-      operator: req.body?.operator,
-      details: { status: event.status }
-    });
-
-    res.json(event);
-  } catch (err) {
-    console.error('Event publish failed:', err);
-    res.status(500).json({ error: 'Failed to publish event.' });
-  }
+  try { const event = await Event.findByIdAndUpdate(eventId, { $set: { status: 'Active' } }, { new: true }).lean(); if (!event) return res.status(404).json({ error: 'Event not found.' }); await appendAuditLog({ eventId, action: 'event_published', operator: req.body?.operator, details: { status: event.status } }); res.json({ ...event, id: event._id }); } catch { res.status(500).json({ error: 'Failed to publish event.' }); }
 }
 
 export async function listEventAudit(req, res) {
   const { eventId } = req.params;
   try {
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
-      select: { id: true, name: true, createdAt: true }
-    });
-    if (!event) return res.status(404).json({ error: 'Event not found.' });
-
-    const [logs, entryCount] = await Promise.all([
-      listAuditLogs(eventId),
-      prisma.entry.count({ where: { eventId } })
-    ]);
-
-    res.json({ event, entryCount, logs });
-  } catch (err) {
-    console.error('Event audit query failed:', err);
-    res.status(500).json({ error: 'Failed to fetch audit log.' });
-  }
+    const event = await Event.findById(eventId).select('_id name createdAt').lean(); if (!event) return res.status(404).json({ error: 'Event not found.' });
+    const [logs, entryCount] = await Promise.all([listAuditLogs(eventId), Entry.countDocuments({ eventId })]);
+    res.json({ event: { ...event, id: event._id }, entryCount, logs });
+  } catch { res.status(500).json({ error: 'Failed to fetch audit log.' }); }
 }
 
 export async function createEventAudit(req, res) {
-  const { eventId } = req.params;
-  const action = String(req.body?.action || '').trim();
-  if (!action) return res.status(400).json({ error: 'Audit action is required.' });
-
-  try {
-    const event = await prisma.event.findUnique({ where: { id: eventId } });
-    if (!event) return res.status(404).json({ error: 'Event not found.' });
-
-    const log = await appendAuditLog({
-      eventId,
-      action,
-      operator: req.body?.operator,
-      details: req.body?.details || {}
-    });
-    res.status(201).json(log);
-  } catch (err) {
-    console.error('Event audit create failed:', err);
-    res.status(500).json({ error: 'Failed to write audit log.' });
-  }
+  const { eventId } = req.params; const action = String(req.body?.action || '').trim(); if (!action) return res.status(400).json({ error: 'Audit action is required.' });
+  try { const event = await Event.findById(eventId).lean(); if (!event) return res.status(404).json({ error: 'Event not found.' }); const log = await appendAuditLog({ eventId, action, operator: req.body?.operator, details: req.body?.details || {} }); res.status(201).json(log); } catch { res.status(500).json({ error: 'Failed to write audit log.' }); }
 }
 
 export async function deleteEvent(req, res) {
   const { eventId } = req.params;
   try {
-    const event = await prisma.event.findUnique({ where: { id: eventId } });
-    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    const event = await Event.findById(eventId).lean(); if (!event) return res.status(404).json({ error: 'Event not found.' });
+    const entries = await Entry.find({ eventId }).select('participantId').lean();
+    const participantIds = [...new Set(entries.map((e) => e.participantId).filter(Boolean))];
+    const shared = await Entry.find({ participantId: { $in: participantIds }, eventId: { $ne: eventId } }).select('participantId').lean();
+    const sharedSet = new Set(shared.map((s) => s.participantId));
+    const deleteParticipants = participantIds.filter((id) => !sharedSet.has(id));
 
-    const [categories, ruleSets] = await Promise.all([
-      prisma.prizeCategory.findMany({
-        where: { eventId },
-        select: { id: true }
-      }),
-      prisma.drawRuleSet.findMany({
-        where: { eventId },
-        select: { id: true }
-      })
-    ]);
-
-    const categoryIds = categories.map((c) => c.id);
-    const ruleSetIds = ruleSets.map((r) => r.id);
-
-    // Collect participant IDs to delete BEFORE the transaction (while entries still exist).
-    // Delete participants whose entries ALL belong to this event only (not shared with other events).
-    const participantsToDelete = await prisma.participant.findMany({
-      where: {
-        entries: { some: { eventId } }
-      },
-      select: { id: true, entries: { select: { eventId: true } } }
-    });
-    const participantIdsToDelete = participantsToDelete
-      .filter((p) => p.entries.every((e) => e.eventId === eventId))
-      .map((p) => p.id);
-
-    await prisma.$transaction([
-      prisma.notification.deleteMany({ where: { eventId } }),
-      prisma.winner.deleteMany({ where: { eventId } }),
-      prisma.prize.deleteMany({ where: categoryIds.length ? { prizeCategoryId: { in: categoryIds } } : { prizeCategoryId: '__none__' } }),
-      prisma.drawConstraint.deleteMany({ where: ruleSetIds.length ? { ruleSetId: { in: ruleSetIds } } : { ruleSetId: '__none__' } }),
-      prisma.weightRule.deleteMany({ where: ruleSetIds.length ? { ruleSetId: { in: ruleSetIds } } : { ruleSetId: '__none__' } }),
-      prisma.prizeCategory.deleteMany({ where: { eventId } }),
-      prisma.drawRuleSet.deleteMany({ where: { eventId } }),
-      prisma.auditLog.deleteMany({ where: { eventId } }),
-      prisma.brandAsset.updateMany({ where: { scopeId: eventId }, data: { scopeId: null } }),
-      prisma.entry.deleteMany({ where: { eventId } }),
-      ...(participantIdsToDelete.length > 0
-        ? [prisma.participant.deleteMany({ where: { id: { in: participantIdsToDelete } } })]
-        : []),
-      prisma.uploadBatch.deleteMany({ where: { eventId } }),
-      prisma.event.delete({ where: { id: eventId } })
+    await Promise.all([
+      Notification.deleteMany({ eventId }), Winner.deleteMany({ eventId }), AuditLog.deleteMany({ eventId }), BrandAsset.updateMany({ scopeId: eventId }, { $set: { scopeId: null } }), Entry.deleteMany({ eventId }), UploadBatch.deleteMany({ eventId }), Event.deleteOne({ _id: eventId }), deleteParticipants.length ? Participant.deleteMany({ _id: { $in: deleteParticipants } }) : Promise.resolve()
     ]);
     res.json({ deleted: true });
-  } catch (err) {
-    console.error('Event delete failed:', err);
-    res.status(500).json({
-      error: err?.message || 'Failed to delete event.',
-      code: err?.code,
-      meta: err?.meta
-    });
-  }
+  } catch { res.status(500).json({ error: 'Failed to delete event.' }); }
 }
+

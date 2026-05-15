@@ -1,12 +1,11 @@
-import prisma from '../prisma.js';
+import { randomUUID } from 'crypto';
+import Participant from '../models/Participant.js';
+import Entry from '../models/Entry.js';
 
 function deriveName(fullName) {
   if (!fullName) return { firstName: null, lastName: null };
-  const trimmed = String(fullName).trim();
-  if (!trimmed) return { firstName: null, lastName: null };
-  const parts = trimmed.split(/\s+/);
-  if (parts.length === 1) return { firstName: parts[0], lastName: null };
-  return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+  const parts = String(fullName).trim().split(/\s+/);
+  return parts.length <= 1 ? { firstName: parts[0] || null, lastName: null } : { firstName: parts[0], lastName: parts.slice(1).join(' ') };
 }
 
 function buildFallbackEmail(employeeId, entryCode) {
@@ -17,54 +16,26 @@ function buildFallbackEmail(employeeId, entryCode) {
 
 export async function findOrCreateParticipantFromEntry({ employeeId, fullName, email, department, entryCode }) {
   const normalizedEmail = String(email || '').trim().toLowerCase();
-
   let existing = null;
-  if (employeeId) {
-    existing = await prisma.participant.findFirst({ where: { employeeId } });
-  }
-  if (!existing && normalizedEmail) {
-    existing = await prisma.participant.findFirst({ where: { email: normalizedEmail } });
-  }
-  if (existing) return existing;
-
+  if (employeeId) existing = await Participant.findOne({ employeeId }).lean();
+  if (!existing && normalizedEmail) existing = await Participant.findOne({ email: normalizedEmail }).lean();
+  if (existing) return { ...existing, id: existing._id };
   const { firstName, lastName } = deriveName(fullName);
-  return prisma.participant.create({
-    data: {
-      employeeId: employeeId || null,
-      email: normalizedEmail || buildFallbackEmail(employeeId, entryCode),
-      firstName,
-      lastName,
-      role: department || null,
-      status: 'ACTIVE'
-    }
-  });
+  const created = await Participant.create({ _id: randomUUID(), employeeId: employeeId || null, email: normalizedEmail || buildFallbackEmail(employeeId, entryCode), firstName, lastName, role: department || null, status: 'ACTIVE' });
+  return created.toObject();
 }
 
 export async function getExcludedEmployeeIds(employeeIds) {
-  if (!employeeIds || employeeIds.length === 0) return new Set();
-  const found = await prisma.participant.findMany({
-    where: {
-      employeeId: { in: employeeIds.filter(Boolean) },
-      status: 'EXCLUDED'
-    },
-    select: { employeeId: true }
-  });
+  if (!employeeIds?.length) return new Set();
+  const found = await Participant.find({ employeeId: { $in: employeeIds.filter(Boolean) }, status: 'EXCLUDED' }).select('employeeId').lean();
   return new Set(found.map((p) => p.employeeId).filter(Boolean));
 }
 
 export async function backfillParticipantsForEvent(eventId) {
-  const entries = await prisma.entry.findMany({
-    where: { eventId, participantId: null },
-    select: { id: true, employeeId: true, fullName: true, email: true, department: true }
-  });
+  const entries = await Entry.find({ eventId, $or: [{ participantId: null }, { participantId: '' }] }).select('_id employeeId fullName email department').lean();
   for (const entry of entries) {
-    const participant = await findOrCreateParticipantFromEntry({ ...entry, entryCode: entry.id });
-    if (participant) {
-      await prisma.entry.update({
-        where: { id: entry.id },
-        data: { participantId: participant.id }
-      });
-    }
+    const participant = await findOrCreateParticipantFromEntry({ ...entry, entryCode: entry._id });
+    if (participant) await Entry.updateOne({ _id: entry._id }, { $set: { participantId: participant._id || participant.id } });
   }
   return entries.length;
 }
