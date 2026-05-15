@@ -313,7 +313,7 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
                     <button type="button" className="btn-ghost-sm" onClick={(e) => { e.stopPropagation(); setCustomizationEvent(ev); setCustomizationOpen(true); }}>
                       <IconEdit /> Edit
                     </button>
-                    <button type="button" className={`btn-primary-sm ${ev.status === 'Draft' ? 'btn-disabled' : ''}`} onClick={(e) => { e.stopPropagation(); onSelect?.(ev); }} disabled={ev.status === 'Draft' && false}>
+                    <button type="button" className={`btn-primary-sm ${ev.entriesCount < 2 ? 'btn-disabled' : ''}`} onClick={(e) => { e.stopPropagation(); onSelect?.(ev, true); }} disabled={ev.entriesCount < 2}>
                       <IconRun /> Run
                     </button>
                     <button type="button" className="btn-ghost-sm event-delete-icon" onClick={(e) => { e.stopPropagation(); setDeletingId(ev.id); }} aria-label="Delete" title="Delete Event">

@@ -11,7 +11,7 @@ const EVENT_DASHBOARD_TABS = [
   { id: 'audit', label: 'Audit' }
 ];
 
-export function EventDashboardPage({ eventId, navigate }) {
+export function EventDashboardPage({ eventId, navigate, params }) {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [error, setError] = useState('');
   const [activeEventTab, setActiveEventTab] = useState('entries');
@@ -40,6 +40,15 @@ export function EventDashboardPage({ eventId, navigate }) {
       cancelled = true;
     };
   }, [eventId]);
+
+  useEffect(() => {
+    if (params?.run === 'true' && selectedEvent) {
+      setActiveEventTab('raffle');
+      setTimeout(() => {
+        raffleRandomizerRef.current?.enterFullScreen();
+      }, 500);
+    }
+  }, [params?.run, selectedEvent]);
 
   const workflowStep = !selectedEvent ? 'Loading' : raffleStats.drawn > 0 ? 'Review Winners' : 'Run Draw';
   const uploadLockStatuses = new Set(['uploading', 'parsing', 'pending', 'validating', 'saving', 'processing', 'canceling', 'reconnecting']);
@@ -119,20 +128,6 @@ export function EventDashboardPage({ eventId, navigate }) {
         />
 
         <section hidden={activeEventTab !== 'entries'}>
-          {uploadStats.entryCount >= 2 && (
-            <div style={{ marginBottom: '1rem' }}>
-              <button
-                type="button"
-                className="btn-primary action-btn"
-                onClick={() => {
-                  setActiveEventTab('raffle');
-                  setTimeout(() => raffleRandomizerRef.current?.enterFullScreen(), 100);
-                }}
-              >
-                Run Raffle (Fullscreen)
-              </button>
-            </div>
-          )}
           <EntryUpload
             selectedEvent={selectedEvent}
             onSelectEvent={setSelectedEvent}

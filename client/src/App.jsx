@@ -75,14 +75,14 @@ function SidebarLink({ item, currentPath, navigate, collapsed }) {
 }
 
 export const App = () => {
-  const { path, segments, navigate } = useHashRoute();
+  const { path, segments, params, navigate } = useHashRoute();
   const role = useCurrentRole();
   const user = useCurrentUser();
-  return <AppShell path={path} segments={segments} navigate={navigate} role={role} user={user} />;
+  return <AppShell path={path} segments={segments} params={params} navigate={navigate} role={role} user={user} />;
 };
 
-function AppShell({ path, segments, navigate, role, user }) {
-  const route = useMemo(() => resolveRoute(path, segments), [path, segments]);
+function AppShell({ path, segments, params, navigate, role, user }) {
+  const route = useMemo(() => resolveRoute(path, segments, params), [path, segments, params]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
