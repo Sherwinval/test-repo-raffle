@@ -100,7 +100,7 @@ export function EventDashboardPage({ eventId, navigate }) {
           <EntryUpload
             selectedEvent={selectedEvent}
             onSelectEvent={setSelectedEvent}
-            onDeleteSelectedEvent={() => navigate('/events')}
+            onDeleteSelectedEvent={() => navigate('/')}
             onStatsChange={setUploadStats}
             onUploadStateChange={setUploadState}
             onAuditChange={() => setAuditRefreshKey((key) => key + 1)}
@@ -121,7 +121,7 @@ export function EventDashboardPage({ eventId, navigate }) {
           <EntryUpload
             selectedEvent={selectedEvent}
             onSelectEvent={setSelectedEvent}
-            onDeleteSelectedEvent={() => navigate('/events')}
+            onDeleteSelectedEvent={() => navigate('/')}
             onStatsChange={setUploadStats}
             onUploadStateChange={setUploadState}
             onAuditChange={() => setAuditRefreshKey((key) => key + 1)}

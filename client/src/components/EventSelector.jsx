@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import EventCustomizationWizard from './EventCustomizationWizard';
+import { fetchOverview } from '@/features/overview/overview.service';
 
 const IconTrash = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -58,10 +59,21 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
   const [filterTab, setFilterTab] = useState('All');
 
   const [sortOrder, setSortOrder] = useState('Newest');
+  const [overviewData, setOverviewData] = useState(null);
 
   useEffect(() => {
     fetchEvents();
+    loadOverview();
   }, []);
+
+  async function loadOverview() {
+    try {
+      const data = await fetchOverview();
+      setOverviewData(data);
+    } catch (err) {
+      console.error('Failed to load overview data:', err);
+    }
+  }
 
   async function fetchEvents() {
     setLoading(true);
@@ -106,6 +118,7 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
       setCreating(false);
       setNewName('');
       setError(null);
+      loadOverview();
     } catch {
       setError('Failed to create event.');
     }
@@ -124,6 +137,7 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
       }
       setEvents((prev) => prev.filter((ev) => ev.id !== eventId));
       setDeletingId(null);
+      loadOverview();
       if (selectedEvent?.id === eventId) onDelete?.();
     } catch {
       setError('Failed to delete event.');
@@ -159,10 +173,10 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
         <div className="event-dashboard-actions">
           <div className="event-search-wrapper">
             <IconSearch />
-            <input 
-              type="text" 
-              className="event-search-input" 
-              placeholder="Search events..." 
+            <input
+              type="text"
+              className="event-search-input"
+              placeholder="Search events..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -206,30 +220,30 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
           <p className="kpi-label" style={{ display: 'flex', alignItems: 'center' }}>
             <IconCalendar /> TOTAL EVENTS
           </p>
-          <p className="kpi-value kpi-value--sm" style={{ marginTop: '0.5rem' }}>{events.length}</p>
+          <p className="kpi-value kpi-value--sm" style={{ marginTop: '0.5rem' }}>{overviewData?.counts?.events ?? events.length}</p>
           <p className="tiny-copy kpi-subcopy" style={{ marginTop: '0.25rem' }}>{activeCount} active now</p>
         </article>
         <article className="kpi-card">
           <p className="kpi-label" style={{ display: 'flex', alignItems: 'center' }}>
             <IconRun /> DRAWS RUN
           </p>
-          <p className="kpi-value kpi-value--sm" style={{ marginTop: '0.5rem' }}>312</p>
-          <p className="tiny-copy kpi-subcopy" style={{ marginTop: '0.25rem' }}>this month</p>
+          <p className="kpi-value kpi-value--sm" style={{ marginTop: '0.5rem' }}>{overviewData?.counts?.draws ?? 0}</p>
+          <p className="tiny-copy kpi-subcopy" style={{ marginTop: '0.25rem' }}>total draws</p>
         </article>
         <article className="kpi-card">
           <p className="kpi-label" style={{ display: 'flex', alignItems: 'center' }}>
             <IconUsers /> PARTICIPANTS
           </p>
-          <p className="kpi-value kpi-value--sm" style={{ marginTop: '0.5rem' }}>1,223</p>
+          <p className="kpi-value kpi-value--sm" style={{ marginTop: '0.5rem' }}>{(overviewData?.counts?.participants ?? 0).toLocaleString()}</p>
           <p className="tiny-copy kpi-subcopy" style={{ marginTop: '0.25rem' }}>across all events</p>
         </article>
         <article className="kpi-card">
           <p className="kpi-label" style={{ display: 'flex', alignItems: 'center' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6, marginRight: '6px' }}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> 
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6, marginRight: '6px' }}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
             COMPLETED
           </p>
-          <p className="kpi-value kpi-value--sm" style={{ marginTop: '0.5rem' }}>3</p>
-          <p className="tiny-copy kpi-subcopy" style={{ marginTop: '0.25rem' }}>draws finalised</p>
+          <p className="kpi-value kpi-value--sm" style={{ marginTop: '0.5rem' }}>{overviewData?.counts?.winners ?? 0}</p>
+          <p className="tiny-copy kpi-subcopy" style={{ marginTop: '0.25rem' }}>winners confirmed</p>
         </article>
       </section>
 
@@ -240,7 +254,7 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
           <button className={`tab-btn ${filterTab === 'Draft' ? 'tab-btn--active' : ''}`} onClick={() => setFilterTab('Draft')}>Draft {draftCount}</button>
           <button className={`tab-btn ${filterTab === 'Completed' ? 'tab-btn--active' : ''}`} onClick={() => setFilterTab('Completed')}>Completed {completedCount}</button>
         </div>
-        
+
         <div className="event-sort-wrap">
           <select className="event-sort-select" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
             <option value="Newest">Sort: Newest</option>
@@ -266,9 +280,9 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
             <div key={ev.id} className="event-card-row" onClick={() => onSelect?.(ev)} style={{ cursor: 'pointer' }}>
               {deletingId === ev.id ? (
                 <div className="event-delete-confirm" style={{ padding: '1rem', width: '100%' }}>
-                  <span className="event-delete-confirm-text">Delete &ldquo;{ev.name}&rdquo;?</span>
-                  <button type="button" className="btn-danger-sm" onClick={() => handleDelete(ev.id)}>Delete</button>
-                  <button type="button" className="btn-ghost-sm" onClick={() => setDeletingId(null)}>Cancel</button>
+                  <span className="event-delete-confirm-text">Are you sure you want to delete &ldquo;{ev.name}&rdquo;? This action cannot be undone.</span>
+                  <button type="button" className="btn-danger-sm" onClick={(e) => { e.stopPropagation(); handleDelete(ev.id); }}>Delete</button>
+                  <button type="button" className="btn-ghost-sm" onClick={(e) => { e.stopPropagation(); setDeletingId(null); }}>Cancel</button>
                 </div>
               ) : (
                 <>
@@ -276,7 +290,7 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
                     <h3 className="event-card-title">{ev.name}</h3>
                     <p className="event-card-desc">Random selection among shortlisted nominees. Preference weights applied.</p>
                   </div>
-                  
+
                   <div className="event-card-meta" style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.25rem' }}>
                       <IconCalendar />
@@ -287,14 +301,14 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
                       <span>{ev.entriesCount} entries</span>
                     </div>
                   </div>
-                  
+
                   <div className="event-card-status-col" style={{ flex: 1 }}>
                     <span className={`event-status-pill status-${(ev.status || 'Draft').toLowerCase()}`}>
                       <span className="status-dot"></span>
                       {ev.status || 'Draft'}
                     </span>
                   </div>
-                  
+
                   <div className="event-card-actions" style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
                     <button type="button" className="btn-ghost-sm" onClick={(e) => { e.stopPropagation(); setCustomizationEvent(ev); setCustomizationOpen(true); }}>
                       <IconEdit /> Edit
