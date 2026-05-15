@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useHashRoute } from '@/router/useHashRoute';
 import { useCurrentRole, useCurrentUser } from '@/auth/useCurrentRole';
 import { RequireRole } from '@/auth/RequireRole';
@@ -34,6 +34,12 @@ const IconRules = () => (
 );
 const IconBell = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 01-3.46 0" /></svg>
+);
+const IconChevronLeft = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+);
+const IconChevronRight = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>
 );
 
 const NAV_ITEMS = [
@@ -77,9 +83,10 @@ export const App = () => {
 
 function AppShell({ path, segments, navigate, role, user }) {
   const route = useMemo(() => resolveRoute(path, segments), [path, segments]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
-    <div className="dashboard-shell app-root">
+    <div className={`dashboard-shell app-root${sidebarCollapsed ? ' collapsed' : ''}`}>
       <aside className="dashboard-sidebar">
         <div className="brand-block">
           <div className="brand-logo-wrap">
@@ -91,18 +98,27 @@ function AppShell({ path, segments, navigate, role, user }) {
           <p className="brand-logo-icon-text" aria-label="RD">
             <span className="brand-logo-raffle">R</span><span className="brand-logo-hub">D</span>
           </p>
+          <button
+            type="button"
+            className="sidebar-collapse-btn"
+            onClick={() => setSidebarCollapsed((value) => !value)}
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {sidebarCollapsed ? <IconChevronRight /> : <IconChevronLeft />}
+          </button>
         </div>
         <div className="sidebar-accent-line" />
 
         <div className="sidebar-nav" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <p className="sidebar-label">MAIN</p>
           {NAV_ITEMS.map((item) => (
-            <SidebarLink key={item.path} item={item} currentPath={path} navigate={navigate} />
+            <SidebarLink key={item.path} item={item} currentPath={path} navigate={navigate} collapsed={sidebarCollapsed} />
           ))}
 
           <p className="sidebar-label" style={{ marginTop: '1.5rem' }}>SETTINGS</p>
           {SETTINGS_ITEMS.filter((i) => !i.adminOnly || role === 'ADMIN').map((item) => (
-            <SidebarLink key={item.path} item={item} currentPath={path} navigate={navigate} />
+            <SidebarLink key={item.path} item={item} currentPath={path} navigate={navigate} collapsed={sidebarCollapsed} />
           ))}
         </div>
 

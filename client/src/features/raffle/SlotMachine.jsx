@@ -5,6 +5,7 @@ export const SlotMachine = ({
   winner,
   isSpinning,
   onSpinComplete,
+  freezeNextReelRef,
   reelCount = 7,
   visibleRows = 3,
   spinDurationMs = 3600,
@@ -20,7 +21,7 @@ export const SlotMachine = ({
 
   useEffect(() => {
     if (!isSpinning) return undefined;
-    const stop = startSlotMachineAnimation({
+    const { stop, freezeNextReel } = startSlotMachineAnimation({
       winner,
       reelCount,
       visibleRows: normalizedRows,
@@ -28,8 +29,12 @@ export const SlotMachine = ({
       onFrame: setReels,
       onComplete: onSpinComplete,
     });
-    return stop;
-  }, [isSpinning, winner, normalizedRows, onSpinComplete, reelCount, spinDurationMs]);
+    if (freezeNextReelRef) freezeNextReelRef.current = freezeNextReel;
+    return () => {
+      stop();
+      if (freezeNextReelRef) freezeNextReelRef.current = null;
+    };
+  }, [isSpinning, winner, normalizedRows, onSpinComplete, reelCount, spinDurationMs, freezeNextReelRef]);
 
   return (
     <div className="slot-machine">

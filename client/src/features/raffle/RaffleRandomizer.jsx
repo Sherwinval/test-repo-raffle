@@ -43,6 +43,7 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [isConfirmingWinner, setIsConfirmingWinner] = useState(false);
   const containerRef = useRef(null);
+  const freezeNextReelRef = useRef(null);
 
   const uploadStatus = uploadState?.status || 'idle';
   const uploadIsActive = Boolean(uploadState?.isActive);
@@ -179,7 +180,8 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
       if (e.code === 'Space') {
         e.preventDefault();
         if (isSpinning) {
-          return;
+          // Freeze the leftmost spinning reel on the digit currently visible
+          freezeNextReelRef.current?.();
         } else if (spinComplete) {
           confirmWinner();
         } else if (eligibleEntries.length > 0 && !spinIsPreparing) {
@@ -296,6 +298,7 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
           winner={pendingWinner?.winner?.employeeId || eligibleIds[0] || '---'}
           isSpinning={isSpinning}
           onSpinComplete={handleSpinComplete}
+          freezeNextReelRef={freezeNextReelRef}
           reelCount={7}
           visibleRows={5}
           spinDurationMs={drawDurationSec * 1000}
