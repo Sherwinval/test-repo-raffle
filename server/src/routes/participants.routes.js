@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { requireRole } from '../middleware/requireRole.js';
 import {
   listParticipants,
   getParticipant,
@@ -14,9 +15,9 @@ const router = Router();
 router.get('/', listParticipants);
 router.get('/stats', getParticipantStats);
 router.get('/facets', getParticipantFacets);
-router.post('/merge', mergeParticipants);
-router.post('/bulk-tag', bulkTagParticipants);
+router.post('/merge', requireRole(['ADMIN', 'EVENT_MANAGER']), mergeParticipants);
+router.post('/bulk-tag', requireRole(['ADMIN', 'EVENT_MANAGER']), bulkTagParticipants);
 router.get('/:id', getParticipant);
-router.patch('/:id', updateParticipant);
+router.patch('/:id', requireRole(['ADMIN', 'EVENT_MANAGER']), updateParticipant);
 
 export default router;

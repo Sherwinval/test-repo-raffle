@@ -41,6 +41,7 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
   const [showWinnerPopup, setShowWinnerPopup] = useState(false);
   const [drawDurationSec, setDrawDurationSec] = useState(4);
   const [isFullScreen, setIsFullScreen] = useState(false);
+  const [isConfirmingWinner, setIsConfirmingWinner] = useState(false);
   const containerRef = useRef(null);
 
   const uploadStatus = uploadState?.status || 'idle';
@@ -202,7 +203,10 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
   };
 
   const confirmWinner = async () => {
-    if (!pendingWinner || !selectedEvent?.id) return;
+    if (!pendingWinner || !selectedEvent?.id || isConfirmingWinner) return;
+
+    setIsConfirmingWinner(true);
+    setError('');
 
     const winnerRecord = {
       entry: pendingWinner.winner,
@@ -219,6 +223,7 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
       });
     } catch (err) {
       setError(err.message);
+      setIsConfirmingWinner(false);
       return;
     }
 
@@ -228,6 +233,7 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
     setPendingWinner(null);
     setRedrawContext(null);
     setSpinComplete(false);
+    setIsConfirmingWinner(false);
     setShowWinnerPopup(false);
   };
 
@@ -300,7 +306,10 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
             {spinIsPreparing && <span className="button-spinner" aria-hidden="true" />}
             {spinLabel}
           </button>
-          {spinComplete && pendingWinner && <button type="button" className="btn-primary action-btn claim-btn" onClick={confirmWinner}>CLAIM / CONFIRM WINNER</button>}
+          {spinComplete && pendingWinner && <button type="button" className="btn-primary action-btn claim-btn" onClick={confirmWinner} disabled={isConfirmingWinner}>
+            {isConfirmingWinner && <span className="button-spinner" aria-hidden="true" />}
+            CLAIM / CONFIRM WINNER
+          </button>}
           <button type="button" className="btn-ghost" onClick={handleRedrawLastWinner} disabled={isSpinning || winners.length === 0 || eligibleEntries.length === 0}>Redraw Last Winner</button>
           <button type="button" className="btn-ghost" onClick={onReset} disabled={isSpinning}>Reset Winners</button>
         </div>

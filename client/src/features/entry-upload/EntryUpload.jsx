@@ -142,7 +142,7 @@ export const EntryUpload = ({
           return next;
         });
       }
-    }, 500);
+    }, 1000);
     return () => window.clearInterval(intervalId);
   }, [enableUploadLogic, progressPollKey, uploadId, selectedEvent]);
 

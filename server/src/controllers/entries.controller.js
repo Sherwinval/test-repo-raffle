@@ -15,7 +15,7 @@ import {
 } from '../services/entries.service.js';
 import { findOrCreateParticipantFromEntry, getExcludedEmployeeIds } from '../services/participants.service.js';
 
-const REQUIRED_ENTRY_FIELDS = ['employeeId', 'fullName', 'department', 'email', 'entryCode'];
+const REQUIRED_ENTRY_FIELDS = ['employeeId', 'fullName', 'department', 'entryCode'];
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function cleanEntryRow(row) {
@@ -159,6 +159,7 @@ async function continueEntryUpload({ uploadId, eventId, rows, duplicateMode, rev
   progressMap.set(uploadId, {
     ...progressMap.get(uploadId),
     status: 'saving',
+    batchId: batch.id,
     total: rows.length,
     processed: 0,
     inserted: 0,
@@ -245,7 +246,7 @@ export async function uploadEntries(req, res) {
       });
 
       const firstRow = rows[0];
-      const missingCols = ['employeeId', 'fullName', 'department', 'email', 'entryCode'].filter(
+      const missingCols = ['employeeId', 'fullName', 'department', 'entryCode'].filter(
         (col) => firstRow[col] === undefined
       );
       if (missingCols.length > 0) {
@@ -353,14 +354,15 @@ export async function createEntry(req, res) {
   const entryCode = String(rawEntryCode || '').trim();
 
   // Validate required fields
-  if (!employeeId || !fullName || !department || !email || !entryCode) {
-    return res.status(400).json({ error: 'All fields are required: employeeId, fullName, department, email, entryCode.' });
+    if (!employeeId || !fullName || !department || !entryCode) {
+    return res.status(400).json({ error: 'Required fields: employeeId, fullName, department, entryCode.' });
   }
 
-  // Validate email format
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
+  if (email) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
     return res.status(400).json({ error: 'Invalid email format.' });
+    }
   }
 
   try {
@@ -379,7 +381,7 @@ export async function createEntry(req, res) {
         OR: [
           { entryCode },
           { employeeId },
-          { email }
+          ...(email ? [{ email }] : [])
         ]
       }
     });
@@ -405,7 +407,7 @@ export async function createEntry(req, res) {
       }
     });
 
-    const participant = await findOrCreateParticipantFromEntry({ employeeId, fullName, email, department });
+    const participant = await findOrCreateParticipantFromEntry({ employeeId, fullName, email, department, entryCode });
 
     // Create the entry
     const entry = await prisma.entry.create({

@@ -398,9 +398,32 @@ export default function EventCustomizationWizard({ event, onClose, onPublish }) 
     setMessage('Customization saved locally. Use Publish Event when ready.');
   };
 
-  const publishEvent = () => {
-    setMessage('Event customization published.');
-    onPublish();
+  const publishEvent = async () => {
+    setMessage('Publishing event...');
+    if (!event?.id) {
+      setMessage('Event ID is missing. Unable to publish.');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/events/${event.id}/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        setMessage(errorBody.error || 'Failed to publish event.');
+        return;
+      }
+
+      const publishedEvent = await response.json();
+      setMessage('Event customization published.');
+      onPublish?.(publishedEvent.id);
+    } catch (err) {
+      console.error('Publish event failed:', err);
+      setMessage('Failed to publish event.');
+    }
   };
 
   const resetDefaultColors = () => {

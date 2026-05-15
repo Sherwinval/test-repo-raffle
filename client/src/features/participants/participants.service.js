@@ -1,7 +1,8 @@
-export async function fetchParticipants({ search = '', status, cursor, limit = 50 } = {}) {
+export async function fetchParticipants({ search = '', status, eventId, cursor, limit = 50 } = {}) {
   const params = new URLSearchParams();
   if (search) params.set('search', search);
   if (status) params.set('status', status);
+  if (eventId) params.set('eventId', eventId);
   if (cursor) params.set('cursor', cursor);
   if (limit) params.set('limit', String(limit));
   const res = await fetch(`/api/participants?${params.toString()}`);

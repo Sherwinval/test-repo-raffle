@@ -68,11 +68,10 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
     try {
       const res = await fetch('/api/events');
       const data = await res.json();
-      // Add a mock status so the UI matches the design (Active or Draft)
-      const mappedData = data.map((ev, index) => ({
+      const mappedData = data.map((ev) => ({
         ...ev,
-        status: index % 3 === 0 ? 'Draft' : 'Active',
-        entriesCount: Math.floor(Math.random() * 300) + 50 // Mock entry count
+        status: ev.status || 'Draft',
+        entriesCount: typeof ev.entriesCount === 'number' ? ev.entriesCount : 0
       }));
       setEvents(mappedData);
     } catch {
@@ -98,7 +97,7 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
         return;
       }
       const created = await res.json();
-      const newEv = { ...created, status: 'Active', entriesCount: 0 };
+      const newEv = { ...created, status: 'Draft', entriesCount: 0 };
       setEvents((prev) => [newEv, ...prev]);
       onSelect(newEv);
       setCustomizationEvent(newEv);
@@ -117,7 +116,10 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
       const res = await fetch(`/api/events/${eventId}`, { method: 'DELETE' });
       if (!res.ok) {
         const body = await res.json();
-        setError(body?.error || 'Failed to delete event.');
+        const message = typeof body?.error === 'string'
+          ? body.error
+          : body?.error?.message || 'Failed to delete event.';
+        setError(message);
         return;
       }
       setEvents((prev) => prev.filter((ev) => ev.id !== eventId));
@@ -261,7 +263,7 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
           <p className="tiny-copy" style={{ padding: '1rem' }}>No events found.</p>
         ) : (
           filteredEvents.map((ev) => (
-            <div key={ev.id} className="event-card-row">
+            <div key={ev.id} className="event-card-row" onClick={() => onSelect?.(ev)} style={{ cursor: 'pointer' }}>
               {deletingId === ev.id ? (
                 <div className="event-delete-confirm" style={{ padding: '1rem', width: '100%' }}>
                   <span className="event-delete-confirm-text">Delete &ldquo;{ev.name}&rdquo;?</span>
@@ -287,20 +289,20 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
                   </div>
                   
                   <div className="event-card-status-col" style={{ flex: 1 }}>
-                    <span className={`event-status-pill status-${ev.status.toLowerCase()}`}>
+                    <span className={`event-status-pill status-${(ev.status || 'Draft').toLowerCase()}`}>
                       <span className="status-dot"></span>
-                      {ev.status}
+                      {ev.status || 'Draft'}
                     </span>
                   </div>
                   
                   <div className="event-card-actions" style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                    <button type="button" className="btn-ghost-sm" onClick={() => { setCustomizationEvent(ev); setCustomizationOpen(true); }}>
+                    <button type="button" className="btn-ghost-sm" onClick={(e) => { e.stopPropagation(); setCustomizationEvent(ev); setCustomizationOpen(true); }}>
                       <IconEdit /> Edit
                     </button>
-                    <button type="button" className={`btn-primary-sm ${ev.status === 'Draft' ? 'btn-disabled' : ''}`} onClick={() => onSelect(ev)} disabled={ev.status === 'Draft' && false}>
+                    <button type="button" className={`btn-primary-sm ${ev.status === 'Draft' ? 'btn-disabled' : ''}`} onClick={(e) => { e.stopPropagation(); onSelect?.(ev); }} disabled={ev.status === 'Draft' && false}>
                       <IconRun /> Run
                     </button>
-                    <button type="button" className="btn-ghost-sm event-delete-icon" onClick={() => setDeletingId(ev.id)} aria-label="Delete" title="Delete Event">
+                    <button type="button" className="btn-ghost-sm event-delete-icon" onClick={(e) => { e.stopPropagation(); setDeletingId(ev.id); }} aria-label="Delete" title="Delete Event">
                       <IconTrash />
                     </button>
                   </div>
@@ -315,7 +317,10 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
         <EventCustomizationWizard
           event={customizationEvent}
           onClose={() => { setCustomizationOpen(false); setCustomizationEvent(null); }}
-          onPublish={() => {
+          onPublish={(eventId) => {
+            if (eventId) {
+              setEvents((prev) => prev.map((ev) => ev.id === eventId ? { ...ev, status: 'Active' } : ev));
+            }
             setCustomizationOpen(false);
             setSuccessMessage('Event customization published successfully.');
             setCustomizationEvent(null);

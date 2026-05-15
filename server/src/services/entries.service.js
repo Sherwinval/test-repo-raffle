@@ -1,13 +1,26 @@
 import { randomUUID } from 'crypto';
 import prisma from '../prisma.js';
 import { progressMap } from './progress.service.js';
-import { findOrCreateParticipantFromEntry, getExcludedEmployeeIds } from './participants.service.js';
+import { getExcludedEmployeeIds } from './participants.service.js';
 
 const QUERY_CHUNK_SIZE = 5000;
 const INSERT_CHUNK_SIZE = 1500;
 
+function deriveName(fullName) {
+  if (!fullName) return { firstName: null, lastName: null };
+  const trimmed = String(fullName).trim();
+  if (!trimmed) return { firstName: null, lastName: null };
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) return { firstName: parts[0], lastName: null };
+  return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+}
+
 function uniqueValues(values) {
   return Array.from(new Set((values || []).filter(Boolean)));
+}
+
+function yieldToEventLoop() {
+  return new Promise((resolve) => setImmediate(resolve));
 }
 
 function chunkArray(values, size) {
@@ -47,7 +60,7 @@ export async function findExistingEntryEmployeeIds(eventId, employeeIds) {
 }
 
 export async function findExistingEntryEmails(eventId, emails) {
-  const unique = uniqueValues(emails);
+  const unique = uniqueValues((emails || []).map((e) => String(e || '').trim().toLowerCase()).filter(Boolean));
   if (unique.length === 0) return [];
   const existing = await Promise.all(
     chunkArray(unique, QUERY_CHUNK_SIZE).map((chunk) =>
@@ -58,6 +71,11 @@ export async function findExistingEntryEmails(eventId, emails) {
     )
   );
   return [...new Set(existing.flat().map((r) => r.email))];
+}
+
+function buildFallbackEmail(row) {
+  if (row.employeeId) return `${row.employeeId}@no-email.local`;
+  return `${row.entryCode || randomUUID()}@no-email.local`;
 }
 
 export function buildEntryRowsWithoutDuplicates(rows, existingCodes, existingEmployeeIds, existingEmails) {
@@ -95,23 +113,107 @@ export async function filterExcludedRows(rows) {
 }
 
 export async function processEntryUpload(uploadId, batchId, eventId, rowsToInsert, errorRows, totalFileRows) {
-  const progress = progressMap.get(uploadId);
+  let progress = progressMap.get(uploadId);
   if (!progress) return;
   progress.status = 'saving';
 
   let insertedTotal = 0;
+  const participantByEmployeeId = new Map();
+  const participantByEmail = new Map();
 
   for (let start = 0; start < rowsToInsert.length; start += INSERT_CHUNK_SIZE) {
+    progress = progressMap.get(uploadId);
+    if (!progress || progress.status === 'canceling' || progress.status === 'canceled') {
+      return;
+    }
+
     const chunk = rowsToInsert.slice(start, start + INSERT_CHUNK_SIZE);
 
-    const enriched = [];
-    for (const row of chunk) {
-      const participant = await findOrCreateParticipantFromEntry({
-        employeeId: row.employeeId,
-        fullName: row.fullName,
-        email: row.email,
-        department: row.department
+    const chunkEmployeeIds = uniqueValues(chunk.map((row) => row.employeeId).filter(Boolean));
+    const chunkEmails = uniqueValues(chunk.map((row) => String(row.email || '').toLowerCase()).filter(Boolean));
+    const employeeIdsToQuery = chunkEmployeeIds.filter((id) => !participantByEmployeeId.has(id));
+    const emailsToQuery = chunkEmails.filter((email) => !participantByEmail.has(email));
+
+    if (employeeIdsToQuery.length > 0 || emailsToQuery.length > 0) {
+      const existingParticipants = await prisma.participant.findMany({
+        where: {
+          OR: [
+            employeeIdsToQuery.length > 0 ? { employeeId: { in: employeeIdsToQuery } } : undefined,
+            emailsToQuery.length > 0 ? { email: { in: emailsToQuery } } : undefined
+          ].filter(Boolean)
+        },
+        select: {
+          id: true,
+          employeeId: true,
+          email: true
+        }
       });
+
+      for (const participant of existingParticipants) {
+        if (participant.employeeId) participantByEmployeeId.set(participant.employeeId, participant);
+        if (participant.email) participantByEmail.set(String(participant.email).toLowerCase(), participant);
+      }
+    }
+
+    const missingByKey = new Map();
+    for (const row of chunk) {
+      const emailKey = String(row.email || '').toLowerCase();
+      const existing = (row.employeeId && participantByEmployeeId.get(row.employeeId)) || participantByEmail.get(emailKey);
+      if (existing) continue;
+
+      const fallbackEmail = emailKey || buildFallbackEmail(row);
+      const key = row.employeeId ? `emp:${row.employeeId}` : `email:${fallbackEmail}`;
+      if (!missingByKey.has(key)) {
+        const { firstName, lastName } = deriveName(row.fullName);
+        missingByKey.set(key, {
+          employeeId: row.employeeId || null,
+          email: fallbackEmail,
+          firstName,
+          lastName,
+          role: row.department || null,
+          status: 'ACTIVE'
+        });
+      }
+    }
+
+    if (missingByKey.size > 0) {
+      await prisma.participant.createMany({
+        data: Array.from(missingByKey.values()),
+        skipDuplicates: true
+      });
+
+      const missingRows = Array.from(missingByKey.values());
+      const createdEmployeeIds = uniqueValues(missingRows.map((row) => row.employeeId).filter(Boolean));
+      const createdEmails = uniqueValues(missingRows.map((row) => row.email).filter(Boolean));
+      const refreshedParticipants = await prisma.participant.findMany({
+        where: {
+          OR: [
+            createdEmployeeIds.length > 0 ? { employeeId: { in: createdEmployeeIds } } : undefined,
+            createdEmails.length > 0 ? { email: { in: createdEmails } } : undefined
+          ].filter(Boolean)
+        },
+        select: {
+          id: true,
+          employeeId: true,
+          email: true
+        }
+      });
+
+      for (const participant of refreshedParticipants) {
+        if (participant.employeeId) participantByEmployeeId.set(participant.employeeId, participant);
+        if (participant.email) participantByEmail.set(String(participant.email).toLowerCase(), participant);
+      }
+    }
+
+    const enriched = [];
+    for (let rowIndex = 0; rowIndex < chunk.length; rowIndex += 1) {
+      const row = chunk[rowIndex];
+      progress = progressMap.get(uploadId);
+      if (!progress || progress.status === 'canceling' || progress.status === 'canceled') {
+        return;
+      }
+      const emailKey = String(row.email || '').toLowerCase();
+      const participant = (row.employeeId && participantByEmployeeId.get(row.employeeId)) || participantByEmail.get(emailKey) || null;
       enriched.push({
         id: randomUUID(),
         eventId,
@@ -123,6 +225,11 @@ export async function processEntryUpload(uploadId, batchId, eventId, rowsToInser
         entryCode: row.entryCode,
         participantId: participant?.id ?? null
       });
+
+      progress.processed = Math.min(totalFileRows, start + rowIndex + 1);
+      if (rowIndex % 50 === 0 || rowIndex === chunk.length - 1) {
+        progressMap.set(uploadId, { ...progress });
+      }
     }
 
     const result = await prisma.entry.createMany({ data: enriched, skipDuplicates: true });
@@ -130,6 +237,8 @@ export async function processEntryUpload(uploadId, batchId, eventId, rowsToInser
     progress.processed = start + chunk.length;
     progress.inserted = insertedTotal;
     progressMap.set(uploadId, { ...progress });
+
+    await yieldToEventLoop();
   }
 
   const skippedRows = totalFileRows - errorRows.length - insertedTotal;

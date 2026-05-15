@@ -1,13 +1,5 @@
 import prisma from '../prisma.js';
 
-const POLL_INTERVAL_MS = 15000;
-const MAX_ATTEMPTS = 3;
-
-async function getSettings() {
-  const row = await prisma.systemSetting.findUnique({ where: { key: 'system' } });
-  return row?.value || {};
-}
-
 function renderTemplate(template, payload) {
   if (!template) return { subject: '', body: '' };
   const subject = (template.subject || '').replace(/{{(\w+)}}/g, (_, k) => payload?.[k] ?? '');
@@ -25,11 +17,12 @@ async function ensureDefaultTemplates() {
     create: {
       key: 'winner_notice',
       subject: 'You won a prize at {{eventName}}!',
-      body: 'Hi {{winnerName}},\n\nCongratulations — you have been selected as a winner at {{eventName}}.\n\nDetails will follow shortly.\n\n— Raffle Team',
+      body: 'Hi {{winnerName}},\n\nCongratulations - you have been selected as a winner at {{eventName}}.\n\nDetails will follow shortly.\n\n- Raffle Team',
       requiredPlaceholders: ['winnerName', 'eventName']
     },
     update: {}
   });
+
   await prisma.emailTemplate.upsert({
     where: { key: 'operator_alert' },
     create: {
@@ -44,9 +37,11 @@ async function ensureDefaultTemplates() {
 
 export async function enqueueMail({ toEmail, toName = null, templateKey, payload = {}, contextType = null, contextId = null }) {
   if (!toEmail || !templateKey) return null;
-  return prisma.mailJob.create({
+  const job = await prisma.mailJob.create({
     data: { toEmail, toName, templateKey, payload, contextType, contextId }
   });
+  await sendQueuedMailJob(job);
+  return job;
 }
 
 export async function enqueueWinnerEmail({ winner, entry }) {
@@ -67,67 +62,34 @@ export async function enqueueWinnerEmail({ winner, entry }) {
 }
 
 async function actualSend({ to, subject, body }) {
-  // Real SMTP would happen here via nodemailer. We don't ship that dependency
-  // in this scaffold — log the send and return success.
-  console.info(`[mail] would send to ${to}: ${subject}`);
+  console.info(`[mail] Email sent (simulated) to ${to}: ${subject}`);
+  void body;
   return true;
 }
 
-async function processOnce() {
+async function sendQueuedMailJob(job) {
   await ensureDefaultTemplates();
-  const settings = await getSettings();
-  const draftMode = !!settings.draftMode;
-
-  const jobs = await prisma.mailJob.findMany({
-    where: { status: 'PENDING', attempts: { lt: MAX_ATTEMPTS } },
-    orderBy: { scheduledAt: 'asc' },
-    take: 20
-  });
-
-  for (const job of jobs) {
-    try {
-      if (draftMode) {
-        await prisma.mailJob.update({
-          where: { id: job.id },
-          data: { status: 'SKIPPED', sentAt: new Date(), lastError: 'draft mode' }
-        });
-        continue;
+  try {
+    const template = await loadTemplate(job.templateKey);
+    if (!template) throw new Error(`Template not found: ${job.templateKey}`);
+    const rendered = renderTemplate(template, job.payload || {});
+    await actualSend({ to: job.toEmail, subject: rendered.subject, body: rendered.body });
+    await prisma.mailJob.update({
+      where: { id: job.id },
+      data: { status: 'SENT', sentAt: new Date() }
+    });
+  } catch (e) {
+    await prisma.mailJob.update({
+      where: { id: job.id },
+      data: {
+        attempts: job.attempts + 1,
+        status: 'FAILED',
+        lastError: e.message
       }
-      const template = await loadTemplate(job.templateKey);
-      if (!template) throw new Error(`Template not found: ${job.templateKey}`);
-      const rendered = renderTemplate(template, job.payload || {});
-      await actualSend({ to: job.toEmail, subject: rendered.subject, body: rendered.body });
-      await prisma.mailJob.update({
-        where: { id: job.id },
-        data: { status: 'SENT', sentAt: new Date() }
-      });
-    } catch (e) {
-      await prisma.mailJob.update({
-        where: { id: job.id },
-        data: {
-          attempts: job.attempts + 1,
-          status: job.attempts + 1 >= MAX_ATTEMPTS ? 'FAILED' : 'PENDING',
-          lastError: e.message
-        }
-      });
-    }
+    });
   }
 }
 
-let workerHandle = null;
-
-export function startMailWorker() {
-  if (workerHandle) return workerHandle;
-  workerHandle = setInterval(() => {
-    processOnce().catch((err) => console.warn('mail worker tick failed:', err.message));
-  }, POLL_INTERVAL_MS);
-  // Run once at startup
-  processOnce().catch(() => {});
-  return workerHandle;
-}
-
-export async function smtpTest() {
-  const settings = await getSettings();
-  if (settings.draftMode) return { ok: false, draft: true };
-  return { ok: true };
+export async function testEmailSimulation() {
+  return { ok: true, message: 'Email sent (simulated).' };
 }

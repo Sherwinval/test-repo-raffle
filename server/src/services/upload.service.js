@@ -63,7 +63,7 @@ export function buildRowsWithoutDuplicates(rows, existingDuplicateEmails, existi
 }
 
 export async function processUpload(uploadId, insertRows) {
-  const progress = progressMap.get(uploadId);
+  let progress = progressMap.get(uploadId);
   if (!progress) return;
   progress.status = 'processing';
   progress.total = insertRows.length;
@@ -73,6 +73,10 @@ export async function processUpload(uploadId, insertRows) {
   let insertedTotal = 0;
 
   for (let start = 0; start < insertRows.length; start += chunkSize) {
+    progress = progressMap.get(uploadId);
+    if (!progress || progress.status === 'canceling' || progress.status === 'canceled') {
+      return;
+    }
     const chunk = insertRows.slice(start, start + chunkSize);
     const result = await prisma.participant.createMany({
       data: chunk

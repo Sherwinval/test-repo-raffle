@@ -17,11 +17,11 @@ export async function saveSystemSettings(data) {
   return res.json();
 }
 
-export async function testSmtp() {
-  const res = await fetch('/api/settings/smtp/test', { method: 'POST' });
+export async function testEmailSimulation() {
+  const res = await fetch('/api/settings/email/test', { method: 'POST' });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || 'SMTP test failed.');
+    throw new Error(err.error || 'Email simulation failed.');
   }
   return res.json();
 }

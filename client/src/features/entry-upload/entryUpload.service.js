@@ -1,3 +1,29 @@
+async function parseResponseBody(res) {
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    try {
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  try {
+    const text = await res.text();
+    return { error: text?.trim() || null };
+  } catch {
+    return null;
+  }
+}
+
+function extractErrorMessage(body, fallback) {
+  if (!body) return fallback;
+  if (typeof body.error === 'string') return body.error;
+  if (body.error && typeof body.error.message === 'string') return body.error.message;
+  if (typeof body.message === 'string') return body.message;
+  return fallback;
+}
+
 export const fetchEvents = async () => {
   const res = await fetch('/api/events');
   if (!res.ok) throw new Error('Failed to load events.');
@@ -11,7 +37,7 @@ export const createEvent = async (name) => {
     body: JSON.stringify({ name })
   });
   if (!res.ok) {
-    const body = await res.json();
+    const body = await parseResponseBody(res);
     throw new Error(body?.error || 'Failed to create event.');
   }
   return res.json();
@@ -20,8 +46,8 @@ export const createEvent = async (name) => {
 export const deleteEvent = async (eventId) => {
   const res = await fetch(`/api/events/${eventId}`, { method: 'DELETE' });
   if (!res.ok) {
-    const body = await res.json();
-    throw new Error(body?.error || 'Failed to delete event.');
+    const body = await parseResponseBody(res);
+    throw new Error(extractErrorMessage(body, 'Failed to delete event.'));
   }
   return res.json();
 };
@@ -40,7 +66,7 @@ export const validateEntryUpload = async ({ eventId, file }) => {
   }
 
   if (!res.ok) {
-    const body = await res.json();
+    const body = await parseResponseBody(res);
     throw new Error(body?.error || 'Validation failed.');
   }
 
@@ -64,7 +90,7 @@ export const uploadEntries = async ({ eventId, file, duplicateMode, signal }) =>
   }
 
   if (!res.ok) {
-    const body = await res.json();
+    const body = await parseResponseBody(res);
     throw new Error(body?.error || 'Upload failed.');
   }
 
@@ -73,7 +99,7 @@ export const uploadEntries = async ({ eventId, file, duplicateMode, signal }) =>
 
 export const cancelUpload = async (uploadId) => {
   const res = await fetch(`/api/upload/cancel/${uploadId}`, { method: 'POST' });
-  const body = await res.json();
+  const body = await parseResponseBody(res);
   if (!res.ok) {
     throw new Error(body?.error || 'Failed to cancel upload.');
   }
@@ -83,7 +109,7 @@ export const cancelUpload = async (uploadId) => {
 export const fetchUploadProgress = async (uploadId) => {
   const res = await fetch(`/api/upload/progress/${uploadId}`);
   if (!res.ok) {
-    const body = await res.json();
+    const body = await parseResponseBody(res);
     throw new Error(body?.error || 'Progress request failed.');
   }
   return res.json();
@@ -95,7 +121,7 @@ export const resolveUploadIssues = async ({ uploadId, rows }) => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ rows })
   });
-  const body = await res.json();
+  const body = await parseResponseBody(res);
   if (!res.ok) {
     throw new Error(body?.error || 'Failed to resolve upload issues.');
   }
@@ -126,12 +152,12 @@ export const createEntry = async ({ eventId, employeeId, fullName, department, e
   });
 
   if (res.status === 409) {
-    const body = await res.json();
+    const body = await parseResponseBody(res);
     throw new Error(body.error);
   }
 
   if (!res.ok) {
-    const body = await res.json();
+    const body = await parseResponseBody(res);
     throw new Error(body?.error || 'Failed to create entry.');
   }
 
@@ -151,7 +177,7 @@ export const appendEventAudit = async ({ eventId, action, operator = 'Raffle Ope
     body: JSON.stringify({ action, operator, details })
   });
   if (!res.ok) {
-    const body = await res.json();
+    const body = await parseResponseBody(res);
     throw new Error(body?.error || 'Failed to write audit log.');
   }
   return res.json();

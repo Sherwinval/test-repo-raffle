@@ -9,6 +9,10 @@ import {
 
 const LOCAL_USER = 'local-operator';
 
+function isPermissionError(err) {
+  return err?.code === 'EACCES' || /permission denied/i.test(String(err?.message || ''));
+}
+
 export async function listHandler(req, res) {
   try {
     const data = await listNotifications({
@@ -18,14 +22,21 @@ export async function listHandler(req, res) {
     });
     res.json(data);
   } catch (err) {
+    if (isPermissionError(err)) {
+      return res.json({ items: [] });
+    }
     res.status(500).json({ error: 'Failed to load notifications.' });
   }
 }
 
 export async function unreadCountHandler(req, res) {
   try {
+    res.setHeader('Cache-Control', 'private, max-age=30');
     res.json(await unreadCount(req.query.userId || LOCAL_USER));
   } catch (err) {
+    if (isPermissionError(err)) {
+      return res.json({ count: 0 });
+    }
     res.status(500).json({ error: 'Failed to load count.' });
   }
 }

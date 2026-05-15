@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { PageShell } from './PageShell';
-import { fetchSystemSettings, saveSystemSettings, testSmtp } from '@/features/settings/settings.service';
+import { fetchSystemSettings, saveSystemSettings, testEmailSimulation } from '@/features/settings/settings.service';
 
 const SECTIONS = [
   { id: 'system', label: 'System' },
@@ -46,12 +46,12 @@ function SystemSection() {
     }
   }
 
-  async function handleSmtpTest() {
+  async function handleEmailSimulationTest() {
     setMessage('');
     setError('');
     try {
-      const result = await testSmtp();
-      setMessage(`SMTP test ${result.ok ? 'succeeded' : 'queued (draft mode)'}.`);
+      const result = await testEmailSimulation();
+      setMessage(result.message || 'Email sent (simulated).');
     } catch (e) {
       setError(e.message);
     }
@@ -78,26 +78,11 @@ function SystemSection() {
       </section>
 
       <section className="soft-card" style={{ marginBottom: '1rem' }}>
-        <p className="card-heading">Email (SMTP)</p>
-        <Field label="Host">
-          <input type="text" className="event-input" value={data.smtpHost || ''} onChange={(e) => set('smtpHost', e.target.value)} />
-        </Field>
-        <Field label="Port">
-          <input type="number" className="event-input" value={data.smtpPort || 587} onChange={(e) => set('smtpPort', parseInt(e.target.value) || 587)} />
-        </Field>
-        <Field label="Username">
-          <input type="text" className="event-input" value={data.smtpUser || ''} onChange={(e) => set('smtpUser', e.target.value)} />
-        </Field>
-        <Field label="Password" hint="Stored encrypted; write-only.">
-          <input type="password" className="event-input" placeholder={data.smtpPasswordMasked ? '••••••••' : ''} onChange={(e) => set('smtpPassword', e.target.value)} />
-        </Field>
-        <Field label="From address">
-          <input type="email" className="event-input" value={data.smtpFrom || ''} onChange={(e) => set('smtpFrom', e.target.value)} />
-        </Field>
-        <Field label="Draft mode (suppress real sends)">
-          <input type="checkbox" checked={!!data.draftMode} onChange={(e) => set('draftMode', e.target.checked)} />
-        </Field>
-        <button type="button" className="btn-ghost" style={{ marginRight: '0.5rem' }} onClick={handleSmtpTest}>Send test email</button>
+        <p className="card-heading">Email simulation</p>
+        <p className="tiny-copy" style={{ marginBottom: '0.75rem' }}>
+          Emails are simulated only. The system logs a successful send message and does not deliver to real inboxes.
+        </p>
+        <button type="button" className="btn-ghost" style={{ marginRight: '0.5rem' }} onClick={handleEmailSimulationTest}>Simulate email send</button>
       </section>
 
       <section className="soft-card" style={{ marginBottom: '1rem' }}>

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { requireRole } from '../middleware/requireRole.js';
 import {
   listHandler,
   unreadCountHandler,
@@ -12,9 +13,9 @@ const router = Router();
 
 router.get('/', listHandler);
 router.get('/unread-count', unreadCountHandler);
-router.post('/mark-all-read', markAllReadHandler);
+router.post('/mark-all-read', requireRole(['ADMIN', 'EVENT_MANAGER']), markAllReadHandler);
 router.get('/preferences', getPreferencesHandler);
-router.put('/preferences', savePreferencesHandler);
-router.patch('/:id/read', markReadHandler);
+router.put('/preferences', requireRole(['ADMIN', 'EVENT_MANAGER']), savePreferencesHandler);
+router.patch('/:id/read', requireRole(['ADMIN', 'EVENT_MANAGER']), markReadHandler);
 
 export default router;

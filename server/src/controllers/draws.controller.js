@@ -72,6 +72,18 @@ export async function confirmWinnerHandler(req, res) {
     const { getRuleSetForEvent } = await import('../services/rules.service.js');
     const ruleSet = await getRuleSetForEvent(eventId);
 
+    // Check if winner already exists for this entry
+    const existingWinner = await prisma.winner.findFirst({
+      where: {
+        eventId,
+        entryId,
+        status: 'CONFIRMED'
+      }
+    });
+    if (existingWinner) {
+      return res.status(409).json({ error: 'Winner already confirmed for this entry.' });
+    }
+
     const winner = await persistWinner({ eventId, entry, fingerprint, ruleSet, operator, prizeCategoryId });
 
     await appendAuditLog({
@@ -95,14 +107,6 @@ export async function confirmWinnerHandler(req, res) {
       summary: `Winner confirmed: ${entry.fullName} (${entry.employeeId})`,
       payload: { winnerId: winner.id, entryId: winner.entryId, prizeCategoryId }
     });
-
-    // Queue winner email (best-effort, non-blocking)
-    try {
-      const { enqueueWinnerEmail } = await import('../services/mail.service.js');
-      await enqueueWinnerEmail({ winner, entry });
-    } catch (e) {
-      console.warn('Winner email enqueue failed:', e.message);
-    }
 
     res.status(201).json(winner);
   } catch (err) {

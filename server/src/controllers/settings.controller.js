@@ -1,5 +1,5 @@
 import { loadSystemSettings, saveSystemSettingsService } from '../services/settings.service.js';
-import { smtpTest } from '../services/mail.service.js';
+import { testEmailSimulation } from '../services/mail.service.js';
 import { resolveRequestOperator } from '../middleware/requireRole.js';
 
 export async function getSystemSettingsHandler(_req, res) {
@@ -21,9 +21,9 @@ export async function putSystemSettingsHandler(req, res) {
   }
 }
 
-export async function smtpTestHandler(_req, res) {
+export async function emailSimulationTestHandler(_req, res) {
   try {
-    const result = await smtpTest();
+    const result = await testEmailSimulation();
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });

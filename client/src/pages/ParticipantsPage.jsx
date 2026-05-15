@@ -6,6 +6,7 @@ import {
   updateParticipant,
   fetchParticipantFacets
 } from '@/features/participants/participants.service';
+import { fetchEvents } from '@/features/entry-upload/entryUpload.service';
 
 const STATUSES = ['ACTIVE', 'INACTIVE', 'EXCLUDED'];
 
@@ -96,6 +97,8 @@ function ParticipantDetail({ participant, onClose, onUpdate }) {
 export function ParticipantsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [eventFilter, setEventFilter] = useState('');
+  const [events, setEvents] = useState([]);
   const [facets, setFacets] = useState({ statusCounts: {}, total: 0 });
   const [items, setItems] = useState([]);
   const [cursor, setCursor] = useState(null);
@@ -111,6 +114,7 @@ export function ParticipantsPage() {
       const result = await fetchParticipants({
         search,
         status: statusFilter || undefined,
+        eventId: eventFilter || undefined,
         cursor: resetCursor ? null : cursor,
         limit: 50
       });
@@ -122,11 +126,12 @@ export function ParticipantsPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, cursor, items]);
+  }, [search, statusFilter, eventFilter, cursor, items]);
 
-  useEffect(() => { load(true); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [search, statusFilter]);
+  useEffect(() => { load(true); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [search, statusFilter, eventFilter]);
   useEffect(() => {
     fetchParticipantFacets().then(setFacets).catch(() => {});
+    fetchEvents().then(setEvents).catch(() => {});
   }, []);
 
   async function openDetail(id) {
@@ -177,7 +182,13 @@ export function ParticipantsPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="event-sort-wrap">
+        <div className="event-sort-wrap" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          <select className="event-sort-select" value={eventFilter} onChange={(e) => setEventFilter(e.target.value)}>
+            <option value="">All events</option>
+            {events.map((event) => (
+              <option key={event.id} value={event.id}>{event.name}</option>
+            ))}
+          </select>
           <select className="event-sort-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">All statuses</option>
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}

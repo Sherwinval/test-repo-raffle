@@ -53,12 +53,14 @@ export async function getParticipantFacets(_req, res) {
 export async function listParticipants(req, res) {
   const search = String(req.query.search || '').trim();
   const status = String(req.query.status || '').trim();
+  const eventId = String(req.query.eventId || '').trim();
   const limit = Math.min(MAX_LIMIT, Math.max(1, parseInt(req.query.limit) || DEFAULT_LIMIT));
   const cursor = parseCursor(req.query.cursor);
 
   try {
     const where = {
       ...(status && STATUSES.has(status) ? { status } : {}),
+      ...(eventId ? { entries: { some: { eventId } } } : {}),
       ...(search ? {
         OR: [
           { email: { contains: search, mode: 'insensitive' } },

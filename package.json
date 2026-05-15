@@ -1,0 +1,12 @@
+{
+  "name": "entry-upload-workspace",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c green,cyan \"cd server && npm run dev\" \"cd client && npm run dev\"",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

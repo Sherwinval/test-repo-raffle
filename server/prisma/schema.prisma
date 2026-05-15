@@ -60,11 +60,14 @@ model Participant {
   updatedAt   DateTime          @default(now()) @updatedAt
   entries     Entry[]
   winners     Winner[]
+
+  @@unique([email])
 }
 
 model Event {
   id            String          @id @default(uuid())
   name          String
+  status        String          @default("Draft")
   createdAt     DateTime        @default(now())
   entries       Entry[]
   batches       UploadBatch[]
@@ -203,6 +206,7 @@ model Winner {
   voidedAt        DateTime?
 
   @@index([eventId, createdAt])
+  @@index([eventId, status])
   @@index([entryId])
 }
 
