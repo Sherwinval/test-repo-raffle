@@ -2,13 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { createInitialReels, startSlotMachineAnimation } from './slotMachine.animation';
 
 export const SlotMachine = ({
-  entries,
   winner,
   isSpinning,
   onSpinComplete,
   reelCount = 7,
   visibleRows = 3,
-  spinDurationMs = 3600
+  spinDurationMs = 3600,
 }) => {
   const normalizedRows = visibleRows % 2 === 0 ? visibleRows + 1 : visibleRows;
   const centerRowIndex = Math.trunc(normalizedRows / 2);
@@ -27,7 +26,7 @@ export const SlotMachine = ({
       visibleRows: normalizedRows,
       totalDurationMs: spinDurationMs,
       onFrame: setReels,
-      onComplete: onSpinComplete
+      onComplete: onSpinComplete,
     });
     return stop;
   }, [isSpinning, winner, normalizedRows, onSpinComplete, reelCount, spinDurationMs]);

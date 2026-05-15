@@ -6,8 +6,47 @@ datasource db {
   provider = "postgresql"
 }
 
+enum ParticipantStatus {
+  ACTIVE
+  INACTIVE
+  EXCLUDED
+}
+
+enum PrizeTier {
+  MINI
+  MAJOR
+}
+
+enum ConstraintType {
+  HARD
+  SOFT
+}
+
+enum WinnerStatus {
+  CONFIRMED
+  RESET
+  VOIDED
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+}
+
+enum MailJobStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum SettingScope {
+  SYSTEM
+  EVENT
+}
+
 model Participant {
-  id          String   @id @default(uuid())
+  id          String            @id @default(uuid())
   employeeId  String?
   email       String
   role        String?
@@ -15,16 +54,28 @@ model Participant {
   firstName   String?
   lastName    String?
   rawData     Json?
-  createdAt   DateTime @default(now())
+  status      ParticipantStatus @default(ACTIVE)
+  tags        String[]          @default([])
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @default(now()) @updatedAt
+  entries     Entry[]
+  winners     Winner[]
+
+  @@unique([email])
 }
 
 model Event {
-  id        String        @id @default(uuid())
-  name      String
-  createdAt DateTime      @default(now())
-  entries   Entry[]
-  batches   UploadBatch[]
-  auditLogs AuditLog[]
+  id            String          @id @default(uuid())
+  name          String
+  status        String          @default("Draft")
+  createdAt     DateTime        @default(now())
+  entries       Entry[]
+  batches       UploadBatch[]
+  auditLogs     AuditLog[]
+  ruleSet       DrawRuleSet?
+  categories    PrizeCategory[]
+  winners       Winner[]
+  brandAssets   BrandAsset[]
 }
 
 model UploadBatch {
@@ -41,29 +92,187 @@ model UploadBatch {
 }
 
 model Entry {
-  id            String      @id @default(uuid())
+  id            String       @id @default(uuid())
   eventId       String
-  event         Event       @relation(fields: [eventId], references: [id])
+  event         Event        @relation(fields: [eventId], references: [id])
   employeeId    String
   fullName      String
   department    String
   email         String
   entryCode     String
   uploadBatchId String
-  batch         UploadBatch @relation(fields: [uploadBatchId], references: [id])
-  createdAt     DateTime    @default(now())
+  batch         UploadBatch  @relation(fields: [uploadBatchId], references: [id])
+  participantId String?
+  participant   Participant? @relation(fields: [participantId], references: [id])
+  createdAt     DateTime     @default(now())
+  winners       Winner[]
 
   @@unique([eventId, entryCode])
+  @@index([eventId, employeeId])
+  @@index([participantId])
 }
 
 model AuditLog {
-  id         String   @id @default(uuid())
-  eventId    String
-  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  action     String
-  operator   String
-  details    Json?
-  createdAt  DateTime @default(now())
+  id        String   @id @default(uuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  action    String
+  operator  String
+  userId    String?
+  details   Json?
+  createdAt DateTime @default(now())
 
   @@index([eventId, createdAt])
+  @@index([createdAt])
+}
+
+model PrizeCategory {
+  id           String         @id @default(uuid())
+  eventId      String
+  event        Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name         String
+  tier         PrizeTier      @default(MINI)
+  prizeCount   Int            @default(1)
+  displayOrder Int            @default(0)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @default(now()) @updatedAt
+  prizes       Prize[]
+  winners      Winner[]
+
+  @@index([eventId, displayOrder])
+}
+
+model Prize {
+  id              String        @id @default(uuid())
+  prizeCategoryId String
+  category        PrizeCategory @relation(fields: [prizeCategoryId], references: [id], onDelete: Cascade)
+  label           String
+  description     String?
+  winners         Winner[]
+  createdAt       DateTime      @default(now())
+}
+
+model DrawRuleSet {
+  id                     String           @id @default(uuid())
+  eventId                String           @unique
+  event                  Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  crossCategoryExclusion Boolean          @default(false)
+  weightCapMultiplier    Float            @default(10)
+  excludeInactive        Boolean          @default(true)
+  updatedAt              DateTime         @default(now()) @updatedAt
+  weights                WeightRule[]
+  constraints            DrawConstraint[]
+}
+
+model WeightRule {
+  id         String      @id @default(uuid())
+  ruleSetId  String
+  ruleSet    DrawRuleSet @relation(fields: [ruleSetId], references: [id], onDelete: Cascade)
+  attribute  String
+  operator   String
+  value      String
+  multiplier Float       @default(1.0)
+}
+
+model DrawConstraint {
+  id            String         @id @default(uuid())
+  ruleSetId     String
+  ruleSet       DrawRuleSet    @relation(fields: [ruleSetId], references: [id], onDelete: Cascade)
+  attribute     String
+  maxPerValue   Int
+  type          ConstraintType @default(HARD)
+  categoryScope String?
+}
+
+model Winner {
+  id              String         @id @default(uuid())
+  eventId         String
+  event           Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  entryId         String
+  entry           Entry          @relation(fields: [entryId], references: [id])
+  participantId   String?
+  participant     Participant?   @relation(fields: [participantId], references: [id])
+  prizeCategoryId String?
+  prizeCategory   PrizeCategory? @relation(fields: [prizeCategoryId], references: [id])
+  prizeId         String?
+  prize           Prize?         @relation(fields: [prizeId], references: [id])
+  operator        String
+  operatorId      String?
+  rngFingerprint  String
+  ruleSnapshot    Json?
+  status          WinnerStatus   @default(CONFIRMED)
+  voidReason      String?
+  createdAt       DateTime       @default(now())
+  voidedAt        DateTime?
+
+  @@index([eventId, createdAt])
+  @@index([eventId, status])
+  @@index([entryId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String?
+  type      String
+  eventId   String?
+  entityId  String?
+  summary   String
+  payload   Json?
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model NotificationPreference {
+  id       String              @id @default(uuid())
+  userId   String
+  category String
+  channel  NotificationChannel
+  enabled  Boolean             @default(true)
+
+  @@unique([userId, category, channel])
+}
+
+model MailJob {
+  id           String        @id @default(uuid())
+  toEmail      String
+  toName       String?
+  templateKey  String
+  payload      Json?
+  status       MailJobStatus @default(PENDING)
+  attempts     Int           @default(0)
+  lastError    String?
+  scheduledAt  DateTime      @default(now())
+  sentAt       DateTime?
+  contextType  String?
+  contextId    String?
+
+  @@index([status, scheduledAt])
+}
+
+model EmailTemplate {
+  id                   String   @id @default(uuid())
+  key                  String   @unique
+  subject              String
+  body                 String
+  requiredPlaceholders String[] @default([])
+  updatedAt            DateTime @default(now()) @updatedAt
+}
+
+model SystemSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @default(now()) @updatedAt
+  updatedBy String?
+}
+
+model BrandAsset {
+  id        String       @id @default(uuid())
+  scope     SettingScope
+  scopeId   String?
+  event     Event?       @relation(fields: [scopeId], references: [id], onDelete: SetNull)
+  kind      String
+  url       String
+  updatedAt DateTime     @default(now()) @updatedAt
 }

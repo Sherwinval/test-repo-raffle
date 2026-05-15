@@ -5,9 +5,23 @@ export async function listEvents(_req, res) {
   try {
     const events = await prisma.event.findMany({
       orderBy: { createdAt: 'desc' },
-      select: { id: true, name: true, createdAt: true }
+      select: {
+        id: true,
+        name: true,
+        createdAt: true,
+        _count: { select: { entries: true } }
+      }
     });
-    res.json(events);
+
+    const mappedEvents = events.map((event) => ({
+      id: event.id,
+      name: event.name,
+      createdAt: event.createdAt,
+      entriesCount: event._count.entries,
+      status: event.status
+    }));
+
+    res.json(mappedEvents);
   } catch (err) {
     console.error('Events query failed:', err);
     res.status(500).json({ error: 'Failed to fetch events.' });
@@ -29,6 +43,28 @@ export async function createEvent(req, res) {
   } catch (err) {
     console.error('Event create failed:', err);
     res.status(500).json({ error: 'Failed to create event.' });
+  }
+}
+
+export async function publishEvent(req, res) {
+  const { eventId } = req.params;
+  try {
+    const event = await prisma.event.update({
+      where: { id: eventId },
+      data: { status: 'Active' }
+    });
+
+    await appendAuditLog({
+      eventId,
+      action: 'event_published',
+      operator: req.body?.operator,
+      details: { status: event.status }
+    });
+
+    res.json(event);
+  } catch (err) {
+    console.error('Event publish failed:', err);
+    res.status(500).json({ error: 'Failed to publish event.' });
   }
 }
 
@@ -80,12 +116,50 @@ export async function deleteEvent(req, res) {
   try {
     const event = await prisma.event.findUnique({ where: { id: eventId } });
     if (!event) return res.status(404).json({ error: 'Event not found.' });
-    await prisma.entry.deleteMany({ where: { eventId } });
-    await prisma.uploadBatch.deleteMany({ where: { eventId } });
-    await prisma.event.delete({ where: { id: eventId } });
+
+    const [categories, ruleSets] = await Promise.all([
+      prisma.prizeCategory.findMany({
+        where: { eventId },
+        select: { id: true }
+      }),
+      prisma.drawRuleSet.findMany({
+        where: { eventId },
+        select: { id: true }
+      })
+    ]);
+
+    const categoryIds = categories.map((c) => c.id);
+    const ruleSetIds = ruleSets.map((r) => r.id);
+
+    await prisma.$transaction([
+      prisma.notification.deleteMany({ where: { eventId } }),
+      prisma.winner.deleteMany({ where: { eventId } }),
+      prisma.prize.deleteMany({ where: categoryIds.length ? { prizeCategoryId: { in: categoryIds } } : { prizeCategoryId: '__none__' } }),
+      prisma.drawConstraint.deleteMany({ where: ruleSetIds.length ? { ruleSetId: { in: ruleSetIds } } : { ruleSetId: '__none__' } }),
+      prisma.weightRule.deleteMany({ where: ruleSetIds.length ? { ruleSetId: { in: ruleSetIds } } : { ruleSetId: '__none__' } }),
+      prisma.prizeCategory.deleteMany({ where: { eventId } }),
+      prisma.drawRuleSet.deleteMany({ where: { eventId } }),
+      prisma.auditLog.deleteMany({ where: { eventId } }),
+      prisma.brandAsset.updateMany({ where: { scopeId: eventId }, data: { scopeId: null } }),
+      prisma.entry.deleteMany({ where: { eventId } }),
+      prisma.participant.deleteMany({
+        where: {
+          AND: [
+            { entries: { some: { eventId } } },
+            { entries: { every: { eventId } } }
+          ]
+        }
+      }),
+      prisma.uploadBatch.deleteMany({ where: { eventId } }),
+      prisma.event.delete({ where: { id: eventId } })
+    ]);
     res.json({ deleted: true });
   } catch (err) {
     console.error('Event delete failed:', err);
-    res.status(500).json({ error: 'Failed to delete event.' });
+    res.status(500).json({
+      error: err?.message || 'Failed to delete event.',
+      code: err?.code,
+      meta: err?.meta
+    });
   }
 }

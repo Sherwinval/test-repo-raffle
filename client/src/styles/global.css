@@ -143,13 +143,11 @@ body {
   inset: 14px;
   pointer-events: none;
   z-index: 3;
-  background: linear-gradient(
-    180deg,
-    rgba(3, 7, 18, 0.75) 0%,
-    rgba(3, 7, 18, 0) 24%,
-    rgba(3, 7, 18, 0) 72%,
-    rgba(3, 7, 18, 0.75) 100%
-  );
+  background: linear-gradient(180deg,
+      rgba(3, 7, 18, 0.75) 0%,
+      rgba(3, 7, 18, 0) 24%,
+      rgba(3, 7, 18, 0) 72%,
+      rgba(3, 7, 18, 0.75) 100%);
 }
 
 .slot-machine-result-line {

@@ -50,3 +50,23 @@ export const clearWinnersForEvent = (eventId) => {
   saveStoredWinnersByEvent(byEvent);
   return [];
 };
+
+export const confirmWinnerOnServer = async ({ eventId, entryId, fingerprint, prizeCategoryId = null, redrawReason = null }) => {
+  const res = await fetch(`/api/events/${eventId}/draws/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ entryId, fingerprint, prizeCategoryId, redrawReason })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to confirm winner on server.');
+  }
+  return res.json();
+};
+
+export const fetchServerWinnersForEvent = async (eventId) => {
+  const res = await fetch(`/api/draws?eventId=${eventId}`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.items || []).filter((w) => w.status === 'CONFIRMED');
+};

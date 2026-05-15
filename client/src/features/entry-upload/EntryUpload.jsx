@@ -10,7 +10,7 @@ import EntriesTable from '@/components/EntriesTable';
 import { getProgressPercent, validateEntryUploadSelection } from './entryUpload.logic';
 import { cancelUpload, fetchEntryStats, fetchUploadProgress, resolveUploadIssues, uploadEntries } from './entryUpload.service';
 
-const UPLOAD_PROGRESS_STORAGE_KEY = 'rafflehub:active-upload-progress';
+const UPLOAD_PROGRESS_STORAGE_KEY = 'rafdom:active-upload-progress';
 const ACTIVE_UPLOAD_STATUSES = new Set(['uploading', 'parsing', 'pending', 'validating', 'needs-review', 'saving', 'processing', 'canceling', 'reconnecting']);
 const FINISHED_UPLOAD_STATUSES = new Set(['done', 'error', 'canceled']);
 
@@ -142,7 +142,7 @@ export const EntryUpload = ({
           return next;
         });
       }
-    }, 500);
+    }, 1000);
     return () => window.clearInterval(intervalId);
   }, [enableUploadLogic, progressPollKey, uploadId, selectedEvent]);
 
@@ -309,9 +309,9 @@ export const EntryUpload = ({
     if (selectedEvent) {
       fetchEntryStats(selectedEvent.id).then(stats => {
         setEntryCount(stats.totalEntries);
-      onStatsChange?.(stats);
+        onStatsChange?.(stats);
         onAuditChange?.();
-      }).catch(() => {});
+      }).catch(() => { });
     }
   };
 
@@ -350,26 +350,26 @@ export const EntryUpload = ({
           </div>
 
           <div className="tab-wrap" style={{ marginTop: '0.75rem' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setEntryMode('upload');
-                  setError(null);
-                }}
-                className={`tab-btn${entryMode === 'upload' ? ' tab-btn--active' : ''}`}
-              >
-                File Upload
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEntryMode('manual');
-                  setError(null);
-                }}
-                className={`tab-btn${entryMode === 'manual' ? ' tab-btn--active' : ''}`}
-              >
-                Manual Entry
-              </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEntryMode('upload');
+                setError(null);
+              }}
+              className={`tab-btn${entryMode === 'upload' ? ' tab-btn--active' : ''}`}
+            >
+              File Upload
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEntryMode('manual');
+                setError(null);
+              }}
+              className={`tab-btn${entryMode === 'manual' ? ' tab-btn--active' : ''}`}
+            >
+              Manual Entry
+            </button>
           </div>
 
           {entryMode === 'upload' ? (

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { upload } from '../config/multer.js';
+import { requireRole } from '../middleware/requireRole.js';
 import {
   uploadEntries,
   createEntry,
@@ -9,8 +10,8 @@ import {
 
 const router = Router({ mergeParams: true });
 
-router.post('/', createEntry);
-router.post('/upload', upload.single('file'), uploadEntries);
+router.post('/', requireRole(['ADMIN', 'EVENT_MANAGER']), createEntry);
+router.post('/upload', requireRole(['ADMIN', 'EVENT_MANAGER']), upload.single('file'), uploadEntries);
 router.get('/stats', getEntryStats);
 router.get('/', listEntries);
 

@@ -1,19 +1,30 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SlotMachine } from './SlotMachine';
-import { OrbitDrawMachine } from './OrbitDrawMachine';
 import { drawWinner, mapEntryIds } from './raffle.logic';
-import { addWinnerForEvent, clearWinnersForEvent, fetchAllEventEntries, getWinnersForEvent } from './raffle.service';
+import { addWinnerForEvent, clearWinnersForEvent, fetchAllEventEntries, getWinnersForEvent, confirmWinnerOnServer } from './raffle.service';
 import { appendEventAudit } from '@/features/entry-upload/entryUpload.service';
 
 const IconTrophy = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#ff8c00', display: 'inline' }}>
-    <path d="M6 9H4.5a2.5 2.5 0 010-5H6"/><path d="M18 9h1.5a2.5 2.5 0 000-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 1012 0V2z"/>
+    <path d="M6 9H4.5a2.5 2.5 0 010-5H6" /><path d="M18 9h1.5a2.5 2.5 0 000-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 1012 0V2z" />
   </svg>
 );
 
 const IconStar = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="#ff8c00" stroke="#ff8c00" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline', verticalAlign: 'text-bottom' }}>
-    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+  </svg>
+);
+
+const IconMaximize = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+  </svg>
+);
+
+const IconMinimize = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M10 14l-7 7" />
   </svg>
 );
 
@@ -26,10 +37,12 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
   const [spinComplete, setSpinComplete] = useState(false);
   const [pendingWinner, setPendingWinner] = useState(null);
   const [redrawContext, setRedrawContext] = useState(null);
-  const [auditVisible, setAuditVisible] = useState(true);
+  const [auditVisible, setAuditVisible] = useState(false);
   const [showWinnerPopup, setShowWinnerPopup] = useState(false);
   const [drawDurationSec, setDrawDurationSec] = useState(4);
-  const [raffleStyle, setRaffleStyle] = useState('classic');
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [isConfirmingWinner, setIsConfirmingWinner] = useState(false);
+  const containerRef = useRef(null);
 
   const uploadStatus = uploadState?.status || 'idle';
   const uploadIsActive = Boolean(uploadState?.isActive);
@@ -145,6 +158,44 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
     });
   };
 
+  const handleToggleFullScreen = () => {
+    if (!containerRef.current) return;
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen().catch((err) => {
+        console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullScreen(!!document.fullscreenElement);
+    };
+
+    const handleKeyDown = (e) => {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (isSpinning) {
+          return;
+        } else if (spinComplete) {
+          confirmWinner();
+        } else if (eligibleEntries.length > 0 && !spinIsPreparing) {
+          preselectWinner();
+        }
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFsChange);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFsChange);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isSpinning, spinComplete, spinIsPreparing, eligibleEntries.length]);
+
   const handleSpinComplete = () => {
     setIsSpinning(false);
     setSpinComplete(true);
@@ -152,7 +203,10 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
   };
 
   const confirmWinner = async () => {
-    if (!pendingWinner || !selectedEvent?.id) return;
+    if (!pendingWinner || !selectedEvent?.id || isConfirmingWinner) return;
+
+    setIsConfirmingWinner(true);
+    setError('');
 
     const winnerRecord = {
       entry: pendingWinner.winner,
@@ -160,22 +214,26 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
       fingerprint: pendingWinner.fingerprint
     };
 
+    try {
+      await confirmWinnerOnServer({
+        eventId: selectedEvent.id,
+        entryId: pendingWinner.winner.id,
+        fingerprint: pendingWinner.fingerprint,
+        redrawReason: redrawContext?.reason || null
+      });
+    } catch (err) {
+      setError(err.message);
+      setIsConfirmingWinner(false);
+      return;
+    }
+
     const next = addWinnerForEvent(selectedEvent.id, winnerRecord);
     setWinners(next);
-    await writeAudit('winner_confirmed', {
-      winner: {
-        id: pendingWinner.winner.id,
-        employeeId: pendingWinner.winner.employeeId,
-        fullName: pendingWinner.winner.fullName,
-        entryCode: pendingWinner.winner.entryCode
-      },
-      fingerprint: pendingWinner.fingerprint,
-      confirmedAt: winnerRecord.drawnAt,
-      redrawReason: redrawContext?.reason || null
-    });
+    onAuditChange?.();
     setPendingWinner(null);
     setRedrawContext(null);
     setSpinComplete(false);
+    setIsConfirmingWinner(false);
     setShowWinnerPopup(false);
   };
 
@@ -208,14 +266,19 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
   }
 
   return (
-    <div className="raffle-wrap">
+    <div className={`raffle-wrap${isFullScreen ? ' is-fullscreen' : ''}`} ref={containerRef}>
       <div className="soft-card raffle-card">
         <div className="split-row raffle-header-row">
           <div>
             <p className="card-heading">Raffle Randomizer</p>
             <p className="tiny-copy">Winner is cryptographically locked before animation starts.</p>
           </div>
-          <span className="entries-total-badge">{selectedEvent.name}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <button type="button" className="btn-ghost-sm fullscreen-btn" onClick={handleToggleFullScreen} title="Toggle Fullscreen">
+              {isFullScreen ? <IconMinimize /> : <IconMaximize />}
+            </button>
+            <span className="entries-total-badge">{selectedEvent.name}</span>
+          </div>
         </div>
 
         <div className="raffle-stats-row">
@@ -229,40 +292,24 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
           <input id="draw-duration" type="range" min="2" max="12" step="1" value={drawDurationSec} onChange={(e) => setDrawDurationSec(Number(e.target.value))} disabled={isSpinning} className="draw-duration-slider" style={{ '--slider-percent': `${((drawDurationSec - 2) / 10) * 100}%` }} />
         </div>
 
-        <div className="draw-duration-wrap">
-          <label htmlFor="raffle-style" className="field-label">Raffle Style</label>
-          <select id="raffle-style" className="entries-filter" value={raffleStyle} onChange={(e) => setRaffleStyle(e.target.value)} disabled={isSpinning}>
-            <option value="classic">Classic Digit Slot</option>
-            <option value="orbit">Orbit Draw</option>
-          </select>
-        </div>
-
-        {raffleStyle === 'orbit' ? (
-          <OrbitDrawMachine
-            entries={eligibleIds}
-            winner={pendingWinner?.winner?.employeeId || eligibleIds[0] || '0000000'}
-            isSpinning={isSpinning}
-            onSpinComplete={handleSpinComplete}
-            spinDurationMs={drawDurationSec * 1000}
-          />
-        ) : (
-          <SlotMachine
-            entries={eligibleIds}
-            winner={pendingWinner?.winner?.employeeId || eligibleIds[0] || '---'}
-            isSpinning={isSpinning}
-            onSpinComplete={handleSpinComplete}
-            reelCount={7}
-            visibleRows={5}
-            spinDurationMs={drawDurationSec * 1000}
-          />
-        )}
+        <SlotMachine
+          winner={pendingWinner?.winner?.employeeId || eligibleIds[0] || '---'}
+          isSpinning={isSpinning}
+          onSpinComplete={handleSpinComplete}
+          reelCount={7}
+          visibleRows={5}
+          spinDurationMs={drawDurationSec * 1000}
+        />
 
         <div className="raffle-action-row">
           <button type="button" className="btn-primary action-btn spin-btn" onClick={() => preselectWinner()} disabled={spinDisabled}>
             {spinIsPreparing && <span className="button-spinner" aria-hidden="true" />}
             {spinLabel}
           </button>
-          {spinComplete && pendingWinner && <button type="button" className="btn-primary action-btn claim-btn" onClick={confirmWinner}>CLAIM / CONFIRM WINNER</button>}
+          {spinComplete && pendingWinner && <button type="button" className="btn-primary action-btn claim-btn" onClick={confirmWinner} disabled={isConfirmingWinner}>
+            {isConfirmingWinner && <span className="button-spinner" aria-hidden="true" />}
+            CLAIM / CONFIRM WINNER
+          </button>}
           <button type="button" className="btn-ghost" onClick={handleRedrawLastWinner} disabled={isSpinning || winners.length === 0 || eligibleEntries.length === 0}>Redraw Last Winner</button>
           <button type="button" className="btn-ghost" onClick={onReset} disabled={isSpinning}>Reset Winners</button>
         </div>

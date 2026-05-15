@@ -1,12 +1,12 @@
 const DEFAULT_TOTAL_DURATION_MS = 3600;
 const DEFAULT_STAGGER_MS = 450;
 
-const easeOutCubic = (t) => 1 - ((1 - t) ** 3);
+export const easeOutCubic = (t) => 1 - ((1 - t) ** 3);
 const safeModulo = (value, length) => ((value % length) + length) % length;
 
-const DIGIT_POOL = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+export const DIGIT_POOL = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
-const buildReelRows = (pool, centerValue, visibleRows, offsetSeed) => {
+export const buildReelRows = (pool, centerValue, visibleRows, offsetSeed) => {
   const half = (visibleRows - 1) / 2;
   const centerIndex = pool.indexOf(centerValue);
   const baseIndex = centerIndex >= 0 ? centerIndex : safeModulo(offsetSeed, pool.length);
@@ -18,7 +18,7 @@ const buildReelRows = (pool, centerValue, visibleRows, offsetSeed) => {
   });
 };
 
-const pickDisplayCenter = (pool, reelIndex, tick) => {
+export const pickDisplayCenter = (pool, reelIndex, tick) => {
   const seed = (reelIndex + 1) * 37 + tick * 17;
   return pool[safeModulo(seed, pool.length)];
 };
@@ -40,10 +40,12 @@ export const startSlotMachineAnimation = ({
 }) => {
   const winnerChars = toDisplayDigits(winner, reelCount);
   const startTime = performance.now();
+  const totalStaggerMs = (reelCount - 1) * staggerMs;
+  const perReelBaseMs = Math.max(totalDurationMs - totalStaggerMs, staggerMs);
 
   const reels = Array.from({ length: reelCount }, (_, index) => ({
     index,
-    stopTime: startTime + totalDurationMs + index * staggerMs,
+    stopTime: startTime + perReelBaseMs + index * staggerMs,
     frozen: false,
     finalRows: []
   }));
@@ -56,7 +58,7 @@ export const startSlotMachineAnimation = ({
 
     const reelRows = reels.map((reel) => {
       const remaining = reel.stopTime - time;
-      const progress = Math.min(1, Math.max(0, (totalDurationMs - remaining) / totalDurationMs));
+      const progress = Math.min(1, Math.max(0, (perReelBaseMs - remaining) / perReelBaseMs));
       const eased = easeOutCubic(progress);
 
       if (time >= reel.stopTime) {

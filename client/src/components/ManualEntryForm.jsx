@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { createEntry, fetchAllEntriesForEvent } from '@/features/entry-upload/entryUpload.service';
 import DuplicateModal from '@/components/DuplicateModal';
 
-const EXPECTED_HEADERS = ['employeeid', 'fullname', 'department', 'email', 'entrycode'];
+const EXPECTED_HEADERS = ['employeeid', 'fullname', 'department', 'entrycode'];
 
 function parseBulkRows(text) {
   const lines = text
@@ -27,18 +27,17 @@ function parseBulkRows(text) {
     employeeId: row[0] ?? '',
     fullName: row[1] ?? '',
     department: row[2] ?? '',
-    email: row[3] ?? '',
-    entryCode: row[4] ?? '',
+    email: '',
+    entryCode: row[3] ?? '',
     rawColumnCount: row.length
   }));
 }
 
 function validateBulkRow(row) {
-  if (row.rawColumnCount < 5) return `Row ${row.rowNumber}: expected 5 columns.`;
+  if (row.rawColumnCount < 4) return `Row ${row.rowNumber}: expected 4 columns.`;
   if (!/^\d{7}$/.test(row.employeeId)) return `Row ${row.rowNumber}: employee ID must be 7 digits.`;
   if (!row.fullName.trim()) return `Row ${row.rowNumber}: full name is required.`;
   if (!row.department.trim()) return `Row ${row.rowNumber}: department is required.`;
-  if (!row.email.trim()) return `Row ${row.rowNumber}: email is required.`;
   if (!row.entryCode.trim()) return `Row ${row.rowNumber}: entry code is required.`;
   return null;
 }
@@ -46,19 +45,16 @@ function validateBulkRow(row) {
 function findBulkDuplicates(rows) {
   const counts = {
     employeeId: new Map(),
-    email: new Map(),
     entryCode: new Map()
   };
 
   for (const row of rows) {
     counts.employeeId.set(row.employeeId, (counts.employeeId.get(row.employeeId) || 0) + 1);
-    counts.email.set(row.email.toLowerCase(), (counts.email.get(row.email.toLowerCase()) || 0) + 1);
     counts.entryCode.set(row.entryCode, (counts.entryCode.get(row.entryCode) || 0) + 1);
   }
 
   const duplicateRows = rows.filter((row) =>
     (counts.employeeId.get(row.employeeId) || 0) > 1 ||
-    (counts.email.get(row.email.toLowerCase()) || 0) > 1 ||
     (counts.entryCode.get(row.entryCode) || 0) > 1
   );
 
@@ -67,18 +63,15 @@ function findBulkDuplicates(rows) {
 
 function keepFirstUniqueRows(rows) {
   const seenEmployeeIds = new Set();
-  const seenEmails = new Set();
   const seenEntryCodes = new Set();
   const kept = [];
 
   for (const row of rows) {
-    const emailKey = row.email.toLowerCase();
-    if (seenEmployeeIds.has(row.employeeId) || seenEmails.has(emailKey) || seenEntryCodes.has(row.entryCode)) {
+    if (seenEmployeeIds.has(row.employeeId) || seenEntryCodes.has(row.entryCode)) {
       continue;
     }
     kept.push(row);
     seenEmployeeIds.add(row.employeeId);
-    seenEmails.add(emailKey);
     seenEntryCodes.add(row.entryCode);
   }
 
@@ -160,23 +153,27 @@ export default function ManualEntryForm({ eventId, onEntryCreated, onError }) {
         return;
       }
 
-      let existingEntries = [];
-      try {
-        existingEntries = await fetchAllEntriesForEvent(eventId);
-      } catch {
-        onError('Could not check existing duplicates. You can retry in a moment.');
-        return;
-      }
+      let existingEmployeeIds = new Set();
+      let existingEntryCodes = new Set();
+      const needsExistingDuplicateCheck = !duplicateMode || duplicateMode === 'without';
 
-      const existingEmployeeIds = new Set(existingEntries.map((r) => normalizeForCompare(r.employeeId)));
-      const existingEmails = new Set(existingEntries.map((r) => normalizeForCompare(r.email)));
-      const existingEntryCodes = new Set(existingEntries.map((r) => normalizeForCompare(r.entryCode)));
+      if (needsExistingDuplicateCheck) {
+        let existingEntries = [];
+        try {
+          existingEntries = await fetchAllEntriesForEvent(eventId);
+        } catch {
+          onError('Could not check existing duplicates. You can retry in a moment.');
+          return;
+        }
+
+        existingEmployeeIds = new Set(existingEntries.map((r) => normalizeForCompare(r.employeeId)));
+        existingEntryCodes = new Set(existingEntries.map((r) => normalizeForCompare(r.entryCode)));
+      }
 
       if (!duplicateMode) {
         const duplicateInfo = findBulkDuplicates(rows);
         const existingDuplicateRows = rows.filter((row) => (
           existingEmployeeIds.has(normalizeForCompare(row.employeeId)) ||
-          existingEmails.has(normalizeForCompare(row.email)) ||
           existingEntryCodes.has(normalizeForCompare(row.entryCode))
         ));
 
@@ -204,7 +201,6 @@ export default function ManualEntryForm({ eventId, onEntryCreated, onError }) {
       if (duplicateMode === 'without') {
         rowsToUpload = keepFirstUniqueRows(rows).filter((row) => (
           !existingEmployeeIds.has(normalizeForCompare(row.employeeId)) &&
-          !existingEmails.has(normalizeForCompare(row.email)) &&
           !existingEntryCodes.has(normalizeForCompare(row.entryCode))
         ));
       }
@@ -305,7 +301,6 @@ export default function ManualEntryForm({ eventId, onEntryCreated, onError }) {
     formData.employeeId.length === 7 &&
     formData.fullName.trim() !== '' &&
     formData.department.trim() !== '' &&
-    formData.email.trim() !== '' &&
     formData.entryCode.trim() !== '';
 
   return (
@@ -340,11 +335,6 @@ export default function ManualEntryForm({ eventId, onEntryCreated, onError }) {
             <input type="text" value={formData.department} onChange={(e) => handleChange('department', e.target.value)} className="event-input" placeholder="IT Department" required />
           </label>
 
-          <label className="field">
-            <span className="field-label">Email</span>
-            <input type="email" value={formData.email} onChange={(e) => handleChange('email', e.target.value)} className="event-input" placeholder="john.doe@company.com" required />
-          </label>
-
           <label className="field manual-span-2">
             <span className="field-label">Entry Code</span>
             <input type="text" value={formData.entryCode} onChange={(e) => handleChange('entryCode', e.target.value)} className="event-input" placeholder="ABC123" required />
@@ -365,12 +355,12 @@ export default function ManualEntryForm({ eventId, onEntryCreated, onError }) {
               onChange={(e) => setBulkText(e.target.value)}
               rows={10}
               className="event-input manual-bulk-input"
-              placeholder={'employeeId,fullName,department,email,entryCode\n1234567,John Doe,IT,john@company.com,ABC123'}
+              placeholder={'employeeId,fullName,department,entryCode\n1234567,John Doe,IT,ABC123'}
               required
             />
           </label>
 
-          <p className="tiny-copy">Expected order: employeeId, fullName, department, email, entryCode. Header row is optional.</p>
+          <p className="tiny-copy">Expected order: employeeId, fullName, department, entryCode. Header row is optional.</p>
           <p className="tiny-copy">Parsed rows: {parsedBulkRows.length}</p>
 
           {bulkProgress && (

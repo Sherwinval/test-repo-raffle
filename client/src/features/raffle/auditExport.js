@@ -45,7 +45,7 @@ const pdfEscape = (value) => String(value ?? '')
 
 function buildPdfTextLines({ event, entryCount, logs }) {
   const lines = [
-    'RaffleHub Audit Report',
+    'RAFDOM Audit Report',
     `Event: ${event?.name || 'Unknown event'}`,
     `Event ID: ${event?.id || ''}`,
     `Created: ${event?.createdAt ? new Date(event.createdAt).toLocaleString() : ''}`,

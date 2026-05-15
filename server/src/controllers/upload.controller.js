@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import prisma from '../prisma.js';
 import { parseFileBuffer } from '../utils/parseFile.js';
 import { findDuplicateValues, findIncompleteRows } from '../utils/duplicates.js';
 import { formatUploadError } from '../utils/errors.js';
@@ -132,4 +133,41 @@ export function getUploadProgress(req, res) {
     return res.status(404).json({ error: 'Upload ID not found.' });
   }
   res.json(progress);
+}
+
+export async function cancelUpload(req, res) {
+  try {
+    const uploadId = req.params.uploadId;
+    const progress = progressMap.get(uploadId);
+    if (!progress) {
+      return res.status(404).json({ error: 'Upload ID not found.' });
+    }
+
+    progress.status = 'canceling';
+    progressMap.set(uploadId, progress);
+
+    const batchId = progress.batchId;
+    if (batchId) {
+      await prisma.$transaction([
+        prisma.entry.deleteMany({ where: { uploadBatchId: batchId } }),
+        prisma.uploadBatch.update({
+          where: { id: batchId },
+          data: {
+            status: 'canceled',
+            insertedRows: 0
+          }
+        })
+      ]);
+    }
+
+    const canceled = {
+      ...progress,
+      status: 'canceled',
+      error: undefined
+    };
+    progressMap.set(uploadId, canceled);
+    res.json(canceled);
+  } catch {
+    res.status(500).json({ error: 'Failed to cancel upload.' });
+  }
 }
