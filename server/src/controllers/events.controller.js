@@ -131,6 +131,18 @@ export async function deleteEvent(req, res) {
     const categoryIds = categories.map((c) => c.id);
     const ruleSetIds = ruleSets.map((r) => r.id);
 
+    // Collect participant IDs to delete BEFORE the transaction (while entries still exist).
+    // Delete participants whose entries ALL belong to this event only (not shared with other events).
+    const participantsToDelete = await prisma.participant.findMany({
+      where: {
+        entries: { some: { eventId } }
+      },
+      select: { id: true, entries: { select: { eventId: true } } }
+    });
+    const participantIdsToDelete = participantsToDelete
+      .filter((p) => p.entries.every((e) => e.eventId === eventId))
+      .map((p) => p.id);
+
     await prisma.$transaction([
       prisma.notification.deleteMany({ where: { eventId } }),
       prisma.winner.deleteMany({ where: { eventId } }),
@@ -142,14 +154,9 @@ export async function deleteEvent(req, res) {
       prisma.auditLog.deleteMany({ where: { eventId } }),
       prisma.brandAsset.updateMany({ where: { scopeId: eventId }, data: { scopeId: null } }),
       prisma.entry.deleteMany({ where: { eventId } }),
-      prisma.participant.deleteMany({
-        where: {
-          AND: [
-            { entries: { some: { eventId } } },
-            { entries: { every: { eventId } } }
-          ]
-        }
-      }),
+      ...(participantIdsToDelete.length > 0
+        ? [prisma.participant.deleteMany({ where: { id: { in: participantIdsToDelete } } })]
+        : []),
       prisma.uploadBatch.deleteMany({ where: { eventId } }),
       prisma.event.delete({ where: { id: eventId } })
     ]);

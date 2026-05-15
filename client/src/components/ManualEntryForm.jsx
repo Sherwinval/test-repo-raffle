@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
-import { createEntry, fetchAllEntriesForEvent } from '@/features/entry-upload/entryUpload.service';
+import { useMemo, useRef, useState, useCallback, useEffect } from 'react';
+import { createEntry, createBulkEntries, fetchBulkEntryProgress, cancelBulkEntryUpload, resolveBulkEntryDuplicates } from '@/features/entry-upload/entryUpload.service';
 import DuplicateModal from '@/components/DuplicateModal';
 
 const EXPECTED_HEADERS = ['employeeid', 'fullname', 'department', 'entrycode'];
@@ -42,52 +42,18 @@ function validateBulkRow(row) {
   return null;
 }
 
-function findBulkDuplicates(rows) {
-  const counts = {
-    employeeId: new Map(),
-    entryCode: new Map()
-  };
-
-  for (const row of rows) {
-    counts.employeeId.set(row.employeeId, (counts.employeeId.get(row.employeeId) || 0) + 1);
-    counts.entryCode.set(row.entryCode, (counts.entryCode.get(row.entryCode) || 0) + 1);
-  }
-
-  const duplicateRows = rows.filter((row) =>
-    (counts.employeeId.get(row.employeeId) || 0) > 1 ||
-    (counts.entryCode.get(row.entryCode) || 0) > 1
-  );
-
-  return { duplicateRows, duplicateCount: duplicateRows.length };
-}
-
-function keepFirstUniqueRows(rows) {
-  const seenEmployeeIds = new Set();
-  const seenEntryCodes = new Set();
-  const kept = [];
-
-  for (const row of rows) {
-    if (seenEmployeeIds.has(row.employeeId) || seenEntryCodes.has(row.entryCode)) {
-      continue;
-    }
-    kept.push(row);
-    seenEmployeeIds.add(row.employeeId);
-    seenEntryCodes.add(row.entryCode);
-  }
-
-  return kept;
-}
-
-function normalizeForCompare(value) {
-  return String(value || '').trim().toLowerCase();
-}
-
 function getBulkProgressMessage(status) {
-  if (status === 'validating') return 'Validating pasted text...';
-  if (status === 'done') return 'Upload complete.';
-  if (status === 'canceled') return 'Bulk upload canceled.';
-  return 'Uploading rows...';
+  if (status === 'validating') return 'Validating entries...';
+  if (status === 'saving') return 'Saving entries to database...';
+  if (status === 'done') return 'Upload complete! ⚡';
+  if (status === 'canceled' || status === 'canceling') return 'Upload canceled.';
+  if (status === 'error') return 'Upload encountered an error.';
+  if (status === 'duplicate-confirmation') return 'Duplicates found — please confirm.';
+  if (status === 'needs-review') return 'Some rows need review.';
+  return 'Processing...';
 }
+
+const POLL_INTERVAL = 400;
 
 export default function ManualEntryForm({ eventId, onEntryCreated, onError }) {
   const [mode, setMode] = useState('single');
@@ -104,9 +70,100 @@ export default function ManualEntryForm({ eventId, onEntryCreated, onError }) {
   const [duplicateModal, setDuplicateModal] = useState(null);
   const [bulkProgress, setBulkProgress] = useState(null);
   const [progressWarning, setProgressWarning] = useState('');
-  const bulkCancelRef = useRef(false);
+  const activeUploadIdRef = useRef(null);
+  const pollTimerRef = useRef(null);
 
   const parsedBulkRows = useMemo(() => parseBulkRows(bulkText), [bulkText]);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    };
+  }, []);
+
+  const stopPolling = useCallback(() => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  }, []);
+
+  const startPolling = useCallback((uploadId) => {
+    stopPolling();
+    pollTimerRef.current = setInterval(async () => {
+      try {
+        const progress = await fetchBulkEntryProgress(eventId, uploadId);
+        const total = progress.total || 0;
+        const processed = progress.processed || 0;
+        const percent = total === 0 ? 0 : Math.round((processed / total) * 100);
+
+        setBulkProgress({
+          total,
+          processed,
+          created: progress.inserted || 0,
+          failed: 0,
+          percent,
+          status: progress.status
+        });
+
+        if (progress.status === 'duplicate-confirmation') {
+          stopPolling();
+          setIsSubmitting(false);
+          setDuplicateModal({
+            totalRows: progress.totalRows || total,
+            duplicateCount: progress.duplicateCount || progress.duplicatesDetected || 0,
+            fileDuplicateCount: progress.fileDuplicateCount || 0,
+            existingDuplicateCount: progress.existingDuplicateCount || 0,
+            uploadId
+          });
+          return;
+        }
+
+        if (progress.status === 'done') {
+          stopPolling();
+          setIsSubmitting(false);
+          const inserted = progress.inserted || 0;
+          const skipped = progress.skippedRows || 0;
+          setBulkResult({
+            total: progress.total || 0,
+            created: inserted,
+            failed: 0,
+            skipped,
+            canceled: false
+          });
+          activeUploadIdRef.current = null;
+          if (inserted > 0) onEntryCreated();
+          return;
+        }
+
+        if (progress.status === 'error') {
+          stopPolling();
+          setIsSubmitting(false);
+          activeUploadIdRef.current = null;
+          onError(progress.error || 'Upload failed.');
+          return;
+        }
+
+        if (progress.status === 'canceled') {
+          stopPolling();
+          setIsSubmitting(false);
+          activeUploadIdRef.current = null;
+          setBulkResult({
+            total: progress.total || 0,
+            created: progress.inserted || 0,
+            failed: 0,
+            skipped: progress.skippedRows || 0,
+            canceled: true
+          });
+          if ((progress.inserted || 0) > 0) onEntryCreated();
+          return;
+        }
+      } catch {
+        // Transient fetch error; keep polling
+      }
+    }, POLL_INTERVAL);
+  }, [eventId, onEntryCreated, onError, stopPolling]);
 
   const handleChange = (field, value) => {
     if (field === 'employeeId') value = value.replace(/\D/g, '').slice(0, 7);
@@ -140,6 +197,24 @@ export default function ManualEntryForm({ eventId, onEntryCreated, onError }) {
     e.preventDefault();
     if (isSubmitting) return;
 
+    // If this is a duplicate resolution from the modal
+    if (duplicateMode && activeUploadIdRef.current) {
+      const uploadId = activeUploadIdRef.current;
+      setDuplicateModal(null);
+      setIsSubmitting(true);
+      setProgressWarning('');
+      setBulkProgress((prev) => prev ? { ...prev, status: 'validating' } : prev);
+
+      try {
+        await resolveBulkEntryDuplicates({ eventId, uploadId, duplicateMode });
+        startPolling(uploadId);
+      } catch (err) {
+        setIsSubmitting(false);
+        onError(err.message);
+      }
+      return;
+    }
+
     try {
       const rows = parseBulkRows(bulkText);
       if (rows.length === 0) {
@@ -153,62 +228,12 @@ export default function ManualEntryForm({ eventId, onEntryCreated, onError }) {
         return;
       }
 
-      let existingEmployeeIds = new Set();
-      let existingEntryCodes = new Set();
-      const needsExistingDuplicateCheck = !duplicateMode || duplicateMode === 'without';
-
-      if (needsExistingDuplicateCheck) {
-        let existingEntries = [];
-        try {
-          existingEntries = await fetchAllEntriesForEvent(eventId);
-        } catch {
-          onError('Could not check existing duplicates. You can retry in a moment.');
-          return;
-        }
-
-        existingEmployeeIds = new Set(existingEntries.map((r) => normalizeForCompare(r.employeeId)));
-        existingEntryCodes = new Set(existingEntries.map((r) => normalizeForCompare(r.entryCode)));
-      }
-
-      if (!duplicateMode) {
-        const duplicateInfo = findBulkDuplicates(rows);
-        const existingDuplicateRows = rows.filter((row) => (
-          existingEmployeeIds.has(normalizeForCompare(row.employeeId)) ||
-          existingEntryCodes.has(normalizeForCompare(row.entryCode))
-        ));
-
-        const totalDuplicateCount = duplicateInfo.duplicateCount + existingDuplicateRows.length;
-        if (totalDuplicateCount > 0) {
-          setDuplicateModal({
-            totalRows: rows.length,
-            duplicateCount: totalDuplicateCount,
-            fileDuplicateCount: duplicateInfo.duplicateCount,
-            existingDuplicateCount: existingDuplicateRows.length
-          });
-          return;
-        }
-      }
-
       setIsSubmitting(true);
       setBulkResult(null);
       setDuplicateModal(null);
       setProgressWarning('');
-      bulkCancelRef.current = false;
-
-      let created = 0;
-      let failed = 0;
-      let rowsToUpload = rows;
-      if (duplicateMode === 'without') {
-        rowsToUpload = keepFirstUniqueRows(rows).filter((row) => (
-          !existingEmployeeIds.has(normalizeForCompare(row.employeeId)) &&
-          !existingEntryCodes.has(normalizeForCompare(row.entryCode))
-        ));
-      }
-
-      let processed = 0;
-      let lastTick = Date.now();
       setBulkProgress({
-        total: rowsToUpload.length,
+        total: rows.length,
         processed: 0,
         created: 0,
         failed: 0,
@@ -216,85 +241,36 @@ export default function ManualEntryForm({ eventId, onEntryCreated, onError }) {
         status: 'validating'
       });
 
-      if (rowsToUpload.length === 0) {
-        setBulkProgress({
-          total: 0,
-          processed: 0,
-          created: 0,
-          failed: 0,
-          percent: 100,
-          status: 'done'
-        });
-        setBulkResult({
-          total: 0,
-          created: 0,
-          failed: 0,
-          canceled: false
-        });
-        return;
-      }
-
-      const stallTimer = window.setInterval(() => {
-        if (Date.now() - lastTick > 8000) {
-          setProgressWarning('Upload is taking longer than expected. Still processing...');
-        }
-      }, 2000);
-
-      for (const row of rowsToUpload) {
-        if (bulkCancelRef.current) break;
-        try {
-          await createEntry({
-            eventId,
-            employeeId: row.employeeId,
-            fullName: row.fullName,
-            department: row.department,
-            email: row.email,
-            entryCode: row.entryCode
-          });
-          created += 1;
-        } catch {
-          failed += 1;
-        } finally {
-          processed += 1;
-          lastTick = Date.now();
-          const percent = rowsToUpload.length === 0 ? 100 : Math.round((processed / rowsToUpload.length) * 100);
-          setBulkProgress({
-            total: rowsToUpload.length,
-            processed,
-            created,
-            failed,
-            percent,
-            status: processed < rowsToUpload.length ? 'uploading' : 'done'
-          });
-        }
-      }
-
-      window.clearInterval(stallTimer);
-      setProgressWarning('');
-      if (created > 0) onEntryCreated();
-
-      const wasCanceled = bulkCancelRef.current;
-      if (wasCanceled) {
-        setBulkProgress((prev) => prev ? { ...prev, status: 'canceled' } : prev);
-      }
-
-      setBulkResult({
-        total: rowsToUpload.length,
-        created,
-        failed,
-        canceled: wasCanceled
+      // Send ALL rows in a single request — the server handles batching with createMany
+      const { uploadId } = await createBulkEntries({
+        eventId,
+        rows: rows.map((r) => ({
+          rowNumber: r.rowNumber,
+          employeeId: r.employeeId,
+          fullName: r.fullName,
+          department: r.department,
+          email: r.email,
+          entryCode: r.entryCode
+        })),
+        duplicateMode
       });
-    } catch {
-      onError('Bulk upload failed unexpectedly. Please try again.');
-    } finally {
+
+      activeUploadIdRef.current = uploadId;
+      startPolling(uploadId);
+    } catch (err) {
       setIsSubmitting(false);
+      onError(err.message || 'Bulk upload failed unexpectedly. Please try again.');
     }
   };
 
-  const handleCancelBulkUpload = () => {
-    if (!isSubmitting) return;
-    bulkCancelRef.current = true;
-    setProgressWarning('Cancel requested. Finishing current row...');
+  const handleCancelBulkUpload = async () => {
+    if (!isSubmitting || !activeUploadIdRef.current) return;
+    setProgressWarning('Cancel requested...');
+    try {
+      await cancelBulkEntryUpload(eventId, activeUploadIdRef.current);
+    } catch {
+      // Best effort
+    }
   };
 
   const isFormValid =
@@ -385,7 +361,7 @@ export default function ManualEntryForm({ eventId, onEntryCreated, onError }) {
 
           {bulkResult && (
             <div className="manual-result-card">
-              Bulk result: {bulkResult.created}/{bulkResult.total} created, {bulkResult.failed} failed{bulkResult.canceled ? ' (canceled)' : ''}.
+              Bulk result: {bulkResult.created}/{bulkResult.total} created{bulkResult.skipped > 0 ? `, ${bulkResult.skipped} skipped` : ''}{bulkResult.canceled ? ' (canceled)' : ''}.
             </div>
           )}
 
@@ -406,7 +382,7 @@ export default function ManualEntryForm({ eventId, onEntryCreated, onError }) {
       {duplicateModal && (
         <DuplicateModal
           modal={duplicateModal}
-          onClose={() => setDuplicateModal(null)}
+          onClose={() => { setDuplicateModal(null); activeUploadIdRef.current = null; }}
           onUploadWith={(e) => handleBulkSubmit(e, 'with')}
           onUploadWithout={(e) => handleBulkSubmit(e, 'without')}
         />

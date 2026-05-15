@@ -70,7 +70,7 @@ export async function listParticipants(req, res) {
 
     const totalPages = Math.ceil(total / limit);
 
-    res.json({ items, totalPages, currentPage: page });
+    res.json({ items, total, totalPages, currentPage: page });
   } catch (err) {
     console.error('Participants list failed:', err);
     res.status(500).json({ error: 'Failed to fetch participants.' });

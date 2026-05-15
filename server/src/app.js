@@ -23,14 +23,14 @@ app.use(
   })
 );
 app.use(helmet());
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '10mb' }));
 
 app.use(
   '/api',
   rateLimit({
     windowMs: 60 * 1000,
     limit: 100,
-    skip: (req) => req.path.startsWith('/upload/progress/'),
+    skip: (req) => req.path.startsWith('/upload/progress/') || req.path.includes('/bulk/progress/'),
     standardHeaders: true,
     legacyHeaders: false
   })

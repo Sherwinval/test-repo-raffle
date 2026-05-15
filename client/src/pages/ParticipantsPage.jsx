@@ -101,6 +101,7 @@ export function ParticipantsPage() {
   const [events, setEvents] = useState([]);
   const [facets, setFacets] = useState({ statusCounts: {}, total: 0 });
   const [items, setItems] = useState([]);
+  const [filteredTotal, setFilteredTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -119,6 +120,7 @@ export function ParticipantsPage() {
         limit: 50
       });
       setItems(result.items);
+      setFilteredTotal(result.total || 0);
       setTotalPages(result.totalPages);
       setCurrentPage(page);
     } catch (e) {
@@ -153,10 +155,17 @@ export function ParticipantsPage() {
       title="Participants"
       subtitle="Master employee registry across all events."
     >
-      <section className="kpi-grid">
+      <section className="kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+        {eventFilter && (
+          <article className="kpi-card" style={{ borderColor: 'var(--accent)' }}>
+            <p className="kpi-label" style={{ color: 'var(--accent)' }}>Event Participants</p>
+            <p className="kpi-value kpi-value--sm">{filteredTotal.toLocaleString()}</p>
+            <p className="tiny-copy">{events.find(e => e.id === eventFilter)?.name}</p>
+          </article>
+        )}
         <article className="kpi-card">
-          <p className="kpi-label">Total</p>
-          <p className="kpi-value kpi-value--sm">{facets.total ?? 0}</p>
+          <p className="kpi-label">{eventFilter ? 'Global Total' : 'Total'}</p>
+          <p className="kpi-value kpi-value--sm">{(facets.total ?? 0).toLocaleString()}</p>
         </article>
         <article className="kpi-card">
           <p className="kpi-label">Active</p>

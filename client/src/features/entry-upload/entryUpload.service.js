@@ -164,6 +164,50 @@ export const createEntry = async ({ eventId, employeeId, fullName, department, e
   return res.json();
 };
 
+export const createBulkEntries = async ({ eventId, rows, duplicateMode }) => {
+  const res = await fetch(`/api/events/${eventId}/entries/bulk`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rows, duplicateMode, operator: 'Raffle Operator' })
+  });
+
+  if (!res.ok) {
+    const body = await parseResponseBody(res);
+    throw new Error(body?.error || 'Bulk entry upload failed.');
+  }
+
+  return res.json();
+};
+
+export const fetchBulkEntryProgress = async (eventId, uploadId) => {
+  const res = await fetch(`/api/events/${eventId}/entries/bulk/progress/${uploadId}`);
+  if (!res.ok) {
+    const body = await parseResponseBody(res);
+    throw new Error(body?.error || 'Progress request failed.');
+  }
+  return res.json();
+};
+
+export const cancelBulkEntryUpload = async (eventId, uploadId) => {
+  const res = await fetch(`/api/events/${eventId}/entries/bulk/cancel/${uploadId}`, {
+    method: 'POST'
+  });
+  const body = await parseResponseBody(res);
+  if (!res.ok) throw new Error(body?.error || 'Failed to cancel upload.');
+  return body;
+};
+
+export const resolveBulkEntryDuplicates = async ({ eventId, uploadId, duplicateMode }) => {
+  const res = await fetch(`/api/events/${eventId}/entries/bulk/resolve/${uploadId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ duplicateMode })
+  });
+  const body = await parseResponseBody(res);
+  if (!res.ok) throw new Error(body?.error || 'Failed to resolve duplicates.');
+  return body;
+};
+
 export const fetchEventAudit = async (eventId) => {
   const res = await fetch(`/api/events/${eventId}/audit`);
   if (!res.ok) throw new Error('Failed to fetch event audit log.');

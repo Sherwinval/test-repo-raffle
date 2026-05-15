@@ -442,6 +442,114 @@ export async function createEntry(req, res) {
   }
 }
 
+export async function bulkCreateEntries(req, res) {
+  const { eventId } = req.params;
+  const { rows: rawRows, duplicateMode: rawDuplicateMode } = req.body;
+
+  if (!Array.isArray(rawRows) || rawRows.length === 0) {
+    return res.status(400).json({ error: 'No rows provided.' });
+  }
+
+  const event = await prisma.event.findUnique({ where: { id: eventId } });
+  if (!event) return res.status(404).json({ error: 'Event not found.' });
+
+  const uploadId = randomUUID();
+  const duplicateMode = String(rawDuplicateMode || '').toLowerCase();
+
+  // Clean and add row numbers
+  const rows = rawRows.map((row, index) => ({
+    rowNumber: row.rowNumber ?? index + 1,
+    employeeId: String(row.employeeId ?? '').trim(),
+    fullName: String(row.fullName ?? '').trim(),
+    department: String(row.department ?? '').trim(),
+    email: String(row.email ?? '').trim().toLowerCase(),
+    entryCode: String(row.entryCode ?? '').trim()
+  }));
+
+  progressMap.set(uploadId, {
+    status: 'validating',
+    total: rows.length,
+    processed: 0,
+    inserted: 0,
+    skippedRows: 0,
+    duplicatesDetected: 0,
+    uploadMode: duplicateMode || 'none',
+    errors: []
+  });
+
+  await appendAuditLog({
+    eventId,
+    action: 'bulk_paste_entry_started',
+    operator: req.body?.operator,
+    details: { uploadId, rowCount: rows.length, duplicateMode: duplicateMode || 'none' }
+  });
+
+  res.status(202).json({ uploadId });
+
+  setImmediate(async () => {
+    try {
+      await continueEntryUpload({ uploadId, eventId, rows, duplicateMode });
+    } catch (err) {
+      const msg = formatUploadError(err);
+      const current = progressMap.get(uploadId) ?? {};
+      progressMap.set(uploadId, { ...current, status: 'error', error: msg });
+    }
+  });
+}
+
+export async function getBulkEntryProgress(req, res) {
+  const { uploadId } = req.params;
+  const progress = progressMap.get(uploadId);
+  if (!progress) return res.status(404).json({ error: 'Upload not found.' });
+  res.json(progress);
+}
+
+export async function cancelBulkEntry(req, res) {
+  const { uploadId } = req.params;
+  const progress = progressMap.get(uploadId);
+  if (!progress) return res.status(404).json({ error: 'Upload not found.' });
+  if (progress.status === 'done' || progress.status === 'error' || progress.status === 'canceled') {
+    return res.json(progress);
+  }
+  progress.status = 'canceling';
+  progressMap.set(uploadId, { ...progress });
+  res.json({ message: 'Cancel requested.', uploadId });
+}
+
+export async function resolveBulkEntryDuplicates(req, res) {
+  const { uploadId } = req.params;
+  const { duplicateMode } = req.body;
+  const context = uploadContextMap.get(uploadId);
+
+  if (!context) return res.status(404).json({ error: 'Upload session not found.' });
+
+  progressMap.set(uploadId, {
+    ...progressMap.get(uploadId),
+    status: 'validating',
+    invalidRows: [],
+    invalidRowCount: 0,
+    error: undefined
+  });
+
+  setImmediate(async () => {
+    try {
+      await continueEntryUpload({
+        uploadId,
+        eventId: context.eventId,
+        rows: context.rows,
+        duplicateMode: duplicateMode || 'without',
+        reviewErrors: context.reviewErrors || []
+      });
+    } catch (err) {
+      const msg = formatUploadError(err);
+      const current = progressMap.get(uploadId) ?? {};
+      progressMap.set(uploadId, { ...current, status: 'error', error: msg });
+    }
+  });
+
+  res.json(progressMap.get(uploadId));
+}
+
 export async function getEntryStats(req, res) {
   const { eventId } = req.params;
   try {
