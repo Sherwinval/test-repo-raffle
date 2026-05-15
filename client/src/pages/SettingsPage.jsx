@@ -70,7 +70,7 @@ function SystemSection() {
           <input type="text" className="event-input" value={data.brandName || ''} onChange={(e) => set('brandName', e.target.value)} />
         </Field>
         <Field label="Accent color (hex)">
-          <input type="text" className="event-input" value={data.accentColor || ''} onChange={(e) => set('accentColor', e.target.value)} placeholder="#ff8c00" />
+          <input type="text" className="event-input" value={data.accentColor || ''} onChange={(e) => set('accentColor', e.target.value)} placeholder="#ef4444" />
         </Field>
         <Field label="Logo URL">
           <input type="text" className="event-input" value={data.logoUrl || ''} onChange={(e) => set('logoUrl', e.target.value)} />
@@ -131,3 +131,4 @@ export function SettingsPage({ section }) {
     </PageShell>
   );
 }
+

@@ -2,52 +2,55 @@
 
 A full-stack internal raffle system for event-based participant upload, duplicate-safe entry ingestion, and secure draw management.
 
-## Project Scope
+## Overview
 
-- Frontend: React + Vite + Tailwind CSS
-- Backend: Node.js + Express
-- ORM: Prisma
-- Database: PostgreSQL (Supabase)
-- Upload support: CSV / Excel
-- Roles: `ADMIN` and `EVENT_MANAGER`
+This repository contains:
 
-## Features
+- `client/`: React + Vite + Tailwind CSS frontend
+- `server/`: Node.js + Express backend with Prisma ORM
+- Bulk upload support for CSV and Excel files
+- Role-based access control for `ADMIN` and `EVENT_MANAGER`
 
-- Event-driven entry upload with duplicate detection
-- Bulk import for 20,000+ rows
-- Progress tracking during upload and validation
-- Secure, auditable raffle/draw logic
-- Role-based authorization and event access control
+The system is built to handle large event uploads with auditability, event scoping, and controlled draw execution.
+
+## Key Features
+
+- Upload participant entries by event
+- Duplicate detection within uploads and against existing event entries
+- Progress tracking and upload validation
+- Secure raffle draw management
+- Event-level authorization and role enforcement
 - Export-ready result handling
 
 ## Repository Structure
 
-- `client/` — React application
-  - `src/` — UI, features, utilities, styles
-  - `public/` — static assets
-- `server/` — Express API and Prisma data model
-  - `src/` — controllers, services, routes, middleware, config
-  - `prisma/` — schema and migrations
+- `client/`
+  - `src/`: application UI, pages, components, hooks, and utilities
+  - `public/`: static assets
+- `server/`
+  - `src/`: Express app, routes, controllers, services, middleware, and config
+  - `prisma/`: Prisma schema, migrations, and seed data
 
 ## Setup
 
 ### Prerequisites
 
-- Node.js 20+ (or compatible)
+- Node.js 20+ or compatible
 - npm
 - PostgreSQL / Supabase database
 
 ### Install dependencies
+
+From the repository root:
 
 ```bash
 cd client && npm install
 cd ../server && npm install
 ```
 
-### Environment
+### Backend environment
 
-The backend uses environment variables stored in `server/.env`.
-Required values include:
+Create or update `server/.env` with the required variables:
 
 - `DATABASE_URL`
 - `DIRECT_URL`
@@ -55,9 +58,8 @@ Required values include:
 - `PORT`
 - `WEB_ORIGIN`
 
-> `server/.env` is already configured for local development in this workspace.
 
-## Running the Application
+## Run the Application
 
 ### Start both client and server
 
@@ -66,11 +68,6 @@ From the repository root:
 ```bash
 npm run dev
 ```
-
-This runs:
-
-- `client`: `npm run dev`
-- `server`: `npm run dev`
 
 ### Run client only
 
@@ -84,40 +81,40 @@ cd client && npm run dev
 cd server && npm run dev
 ```
 
-## Development Notes
+## Notes for Developers
 
 ### Client
 
-- `client/src/App.jsx` is the entry point for UI navigation and feature composition
-- `client/src/features/` contains feature-specific UI, logic, and service code
-- `client/src/utils/` contains shared helpers such as file parsing and validation
+- `client/src/App.jsx`: application shell and route entry point
+- `client/src/features/`: feature-specific UI and logic
+- `client/src/utils/`: shared helpers such as file parsing and validation
 
 ### Server
 
-- `server/src/index.js` boots Express
-- `server/src/routes/` defines API endpoints
-- `server/src/controllers/` handles request flows
-- `server/src/services/` contains business logic
-- `server/src/middleware/` enforces auth, validation, and error handling
+- `server/src/index.js`: Express server startup
+- `server/src/routes/`: API route definitions
+- `server/src/controllers/`: request handling and response flow
+- `server/src/services/`: business logic implementations
+- `server/src/middleware/`: auth, validation, and error handling
 
 ### Prisma
 
-Server schema and migrations are managed in `server/prisma/`.
-
-Common commands:
+Database schema and migrations are located in `server/prisma/`.
+Common Prisma commands:
 
 ```bash
 cd server
 npm run prisma migrate:deploy
-npm run prisma:validate
+npm run prisma validate
 ```
 
-## Notes
+## Recommended Workflow
 
-- Upload processing is designed to support large CSV/Excel imports and avoid duplicate `entry_code` collisions.
-- Event access is enforced at the API layer for `EVENT_MANAGER` and `ADMIN` roles.
-- The UI includes a dedicated entry upload flow and a raffle draw flow with secure randomization.
+1. Configure `server/.env`
+2. Install dependencies in `client/` and `server/`
+3. Start both apps with `npm run dev`
+4. Use the frontend to create events, upload entries, and manage draws
 
-## Contact
+## Reference
 
-For questions or next steps, open `ProjectOverview.md` or inspect the `server` and `client` folders for implementation details.
+See `ProjectOverview.md` for additional design context, user roles, and feature requirements.

@@ -335,14 +335,16 @@ export const EntryUpload = ({
         <EventSelector
           selectedEvent={selectedEvent}
           onSelect={onSelectEvent}
-          onDelete={() => {
-            onDeleteSelectedEvent();
-            setFile(null);
-            setProgress(null);
-            setIssueModalRows(null);
-            localStorage.removeItem(UPLOAD_PROGRESS_STORAGE_KEY);
-            setError(null);
-            setDisplayProgress(0);
+          onDelete={(deletedEventId) => {
+            if (selectedEvent?.id === deletedEventId) {
+              onDeleteSelectedEvent();
+              setFile(null);
+              setProgress(null);
+              setIssueModalRows(null);
+              localStorage.removeItem(UPLOAD_PROGRESS_STORAGE_KEY);
+              setError(null);
+              setDisplayProgress(0);
+            }
           }}
         />
       )}

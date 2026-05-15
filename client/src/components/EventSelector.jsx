@@ -137,8 +137,10 @@ export default function EventSelector({ selectedEvent, onSelect, onDelete }) {
       }
       setEvents((prev) => prev.filter((ev) => ev.id !== eventId));
       setDeletingId(null);
+      setError(null);
+      setSuccessMessage('Event deleted successfully.');
       loadOverview();
-      if (selectedEvent?.id === eventId) onDelete?.();
+      onDelete?.(eventId);
     } catch {
       setError('Failed to delete event.');
     }

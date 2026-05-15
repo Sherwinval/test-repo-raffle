@@ -7,12 +7,12 @@ const themePresets = {
     colors: {
       primary: '#1e3a8a',
       secondary: '#f8fafc',
-      accent: '#f97316',
+      accent: '#ef4444',
       background: '#f8fafc',
       card: '#ffffff',
       text: '#0f172a',
       button: '#1d4ed8',
-      wheelSegments: ['#1d4ed8', '#2563eb', '#0284c7', '#9333ea', '#f97316', '#14b8a6']
+      wheelSegments: ['#1d4ed8', '#2563eb', '#0284c7', '#9333ea', '#ef4444', '#14b8a6']
     }
   },
   Corporate: {
@@ -24,31 +24,31 @@ const themePresets = {
       card: '#ffffff',
       text: '#0f172a',
       button: '#0ea5e9',
-      wheelSegments: ['#0f172a', '#64748b', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6']
+      wheelSegments: ['#0f172a', '#64748b', '#3b82f6', '#22c55e', '#ef4444', '#8b5cf6']
     }
   },
   Party: {
     colors: {
       primary: '#be185d',
       secondary: '#fdf2f8',
-      accent: '#f59e0b',
+      accent: '#ef4444',
       background: '#fff7ed',
       card: '#ffffff',
       text: '#111827',
       button: '#ec4899',
-      wheelSegments: ['#ec4899', '#f97316', '#facc15', '#22c55e', '#0ea5e9', '#8b5cf6']
+      wheelSegments: ['#ec4899', '#ef4444', '#facc15', '#22c55e', '#0ea5e9', '#8b5cf6']
     }
   },
   Luxury: {
     colors: {
       primary: '#111827',
       secondary: '#f8fafc',
-      accent: '#d97706',
+      accent: '#dc2626',
       background: '#fafafa',
       card: '#ffffff',
       text: '#111827',
-      button: '#d97706',
-      wheelSegments: ['#111827', '#4b5563', '#b91c1c', '#d97706', '#f59e0b', '#6d28d9']
+      button: '#dc2626',
+      wheelSegments: ['#111827', '#4b5563', '#b91c1c', '#dc2626', '#ef4444', '#6d28d9']
     }
   },
   Festival: {
@@ -60,7 +60,7 @@ const themePresets = {
       card: '#ffffff',
       text: '#0f172a',
       button: '#6366f1',
-      wheelSegments: ['#ec4899', '#f97316', '#22c55e', '#38bdf8', '#a855f7', '#facc15']
+      wheelSegments: ['#ec4899', '#ef4444', '#22c55e', '#38bdf8', '#a855f7', '#facc15']
     }
   },
   Gaming: {
@@ -72,7 +72,7 @@ const themePresets = {
       card: '#111827',
       text: '#f8fafc',
       button: '#14b8a6',
-      wheelSegments: ['#14b8a6', '#0ea5e9', '#f97316', '#8b5cf6', '#84cc16', '#e11d48']
+      wheelSegments: ['#14b8a6', '#0ea5e9', '#ef4444', '#8b5cf6', '#84cc16', '#e11d48']
     }
   },
   Elegant: {
@@ -1107,3 +1107,4 @@ export default function EventCustomizationWizard({ event, onClose, onPublish }) 
     </div>
   );
 }
+

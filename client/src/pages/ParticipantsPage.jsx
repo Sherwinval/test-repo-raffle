@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+﻿import { useEffect, useState, useCallback } from 'react';
 import { PageShell } from './PageShell';
 import {
   fetchParticipants,
@@ -45,9 +45,9 @@ function ParticipantDetail({ participant, onClose, onUpdate }) {
         <button type="button" className="btn-ghost-sm" onClick={onClose}>Close</button>
       </div>
       <div className="participant-detail-body">
-        <p className="tiny-copy"><strong>Employee ID:</strong> {participant.employeeId || '—'}</p>
+        <p className="tiny-copy"><strong>Employee ID:</strong> {participant.employeeId || 'â€”'}</p>
         <p className="tiny-copy"><strong>Email:</strong> {participant.email}</p>
-        <p className="tiny-copy"><strong>Department:</strong> {participant.rawData?.department || participant.role || '—'}</p>
+        <p className="tiny-copy"><strong>Department:</strong> {participant.rawData?.department || participant.role || 'â€”'}</p>
         <p className="tiny-copy"><strong>Created:</strong> {new Date(participant.createdAt).toLocaleString()}</p>
 
         <label className="field-label" style={{ marginTop: '1rem' }}>Status</label>
@@ -64,7 +64,7 @@ function ParticipantDetail({ participant, onClose, onUpdate }) {
             <ul style={{ listStyle: 'none', padding: 0 }}>
               {participant.entries.map((entry) => (
                 <li key={entry.id} className="tiny-copy">
-                  {entry.event?.name || entry.eventId} — {entry.entryCode} ({new Date(entry.createdAt).toLocaleDateString()})
+                  {entry.event?.name || entry.eventId} â€” {entry.entryCode} ({new Date(entry.createdAt).toLocaleDateString()})
                 </li>
               ))}
             </ul>
@@ -77,7 +77,7 @@ function ParticipantDetail({ participant, onClose, onUpdate }) {
             <ul style={{ listStyle: 'none', padding: 0 }}>
               {participant.winners.map((w) => (
                 <li key={w.id} className="tiny-copy">
-                  {w.event?.name || w.eventId} — {w.prizeCategory?.name || 'Uncategorized'} ({w.status})
+                  {w.event?.name || w.eventId} â€” {w.prizeCategory?.name || 'Uncategorized'} ({w.status})
                 </li>
               ))}
             </ul>
@@ -224,10 +224,10 @@ export function ParticipantsPage() {
             items.map((p) => (
               <div key={p.id} className="event-card-row">
                 <div style={{ flex: 2 }}>
-                  <strong>{[p.firstName, p.lastName].filter(Boolean).join(' ') || '—'}</strong>
+                  <strong>{[p.firstName, p.lastName].filter(Boolean).join(' ') || 'â€”'}</strong>
                 </div>
                 <div style={{ flex: 2 }}>{p.email}</div>
-                <div style={{ flex: 1 }}>{p.employeeId || '—'}</div>
+                <div style={{ flex: 1 }}>{p.employeeId || 'â€”'}</div>
                 <div style={{ flex: 1 }}><StatusPill status={p.status} /></div>
                 <div style={{ flex: 1, textAlign: 'right' }}>
                   <button type="button" className="btn-ghost-sm" onClick={() => openDetail(p.id)}>Open</button>
@@ -242,12 +242,12 @@ export function ParticipantsPage() {
           )}
         </div>
         {totalPages > 1 && (
-          <div style={{ position: 'sticky', bottom: 0, zIndex: 10, background: '#0b0b0d', paddingTop: '1rem', paddingBottom: '0.5rem', marginTop: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-              <button type="button" className="btn-ghost-sm" onClick={() => load(currentPage - 1)} disabled={currentPage === 1}>Previous</button>
-              <button type="button" className={currentPage === 1 ? 'btn-primary' : 'btn-ghost-sm'} onClick={() => load(1)} disabled={currentPage === 1}>1</button>
+          <div className="participants-pagination-wrap">
+            <div className="participants-pagination-row">
+              <button type="button" className="participants-pagination-btn participants-pagination-btn--nav" onClick={() => load(currentPage - 1)} disabled={currentPage === 1}>Previous</button>
+              <button type="button" className={`participants-pagination-btn ${currentPage === 1 ? 'participants-pagination-btn--active' : ''}`} onClick={() => load(1)} disabled={currentPage === 1}>1</button>
               {totalPages > 2 && currentPage > 4 && (
-                <span className="tiny-copy" style={{ padding: '0.5rem 0.75rem' }}>…</span>
+                <span className="participants-pagination-ellipsis">...</span>
               )}
               {Array.from({ length: totalPages }, (_, i) => i + 1)
                 .filter((page) => {
@@ -261,7 +261,7 @@ export function ParticipantsPage() {
                     <button
                       key={page}
                       type="button"
-                      className={page === currentPage ? 'btn-primary' : 'btn-ghost-sm'}
+                      className={`participants-pagination-btn ${page === currentPage ? 'participants-pagination-btn--active' : ''}`}
                       onClick={() => load(page)}
                       disabled={page === currentPage}
                     >
@@ -270,14 +270,14 @@ export function ParticipantsPage() {
                   );
                 })}
               {totalPages > 4 && currentPage < totalPages - 3 && (
-                <span className="tiny-copy" style={{ padding: '0.5rem 0.75rem' }}>…</span>
+                <span className="participants-pagination-ellipsis">...</span>
               )}
               {totalPages > 1 && (
-                <button type="button" className={currentPage === totalPages ? 'btn-primary' : 'btn-ghost-sm'} onClick={() => load(totalPages)} disabled={currentPage === totalPages}>{totalPages}</button>
+                <button type="button" className={`participants-pagination-btn ${currentPage === totalPages ? 'participants-pagination-btn--active' : ''}`} onClick={() => load(totalPages)} disabled={currentPage === totalPages}>{totalPages}</button>
               )}
-              <button type="button" className="btn-ghost-sm" onClick={() => load(currentPage + 1)} disabled={currentPage === totalPages}>Next</button>
+              <button type="button" className="participants-pagination-btn participants-pagination-btn--nav" onClick={() => load(currentPage + 1)} disabled={currentPage === totalPages}>Next</button>
             </div>
-            <div className="tiny-copy">
+            <div className="participants-pagination-meta">
               Page {currentPage} of {totalPages}
             </div>
           </div>
@@ -288,3 +288,4 @@ export function ParticipantsPage() {
     </PageShell>
   );
 }
+

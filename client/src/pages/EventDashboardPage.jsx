@@ -25,6 +25,8 @@ export function EventDashboardPage({ eventId, navigate, params }) {
   useEffect(() => {
     if (!eventId) return;
     let cancelled = false;
+    setError('');
+    setSelectedEvent(null);
     fetchEvents()
       .then((events) => {
         if (cancelled) return;
@@ -33,6 +35,7 @@ export function EventDashboardPage({ eventId, navigate, params }) {
           setError('Event not found.');
           return;
         }
+        setError('');
         setSelectedEvent(found);
       })
       .catch((e) => !cancelled && setError(e.message || 'Failed to load event.'));
