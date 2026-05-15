@@ -101,13 +101,13 @@ export function ParticipantsPage() {
   const [events, setEvents] = useState([]);
   const [facets, setFacets] = useState({ statusCounts: {}, total: 0 });
   const [items, setItems] = useState([]);
-  const [cursor, setCursor] = useState(null);
-  const [nextCursor, setNextCursor] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [detail, setDetail] = useState(null);
 
-  const load = useCallback(async (resetCursor = true) => {
+  const load = useCallback(async (page = 1) => {
     setLoading(true);
     setError('');
     try {
@@ -115,20 +115,20 @@ export function ParticipantsPage() {
         search,
         status: statusFilter || undefined,
         eventId: eventFilter || undefined,
-        cursor: resetCursor ? null : cursor,
+        page,
         limit: 50
       });
-      setItems(resetCursor ? result.items : [...items, ...result.items]);
-      setNextCursor(result.nextCursor);
-      if (resetCursor) setCursor(null);
+      setItems(result.items);
+      setTotalPages(result.totalPages);
+      setCurrentPage(page);
     } catch (e) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, eventFilter, cursor, items]);
+  }, [search, statusFilter, eventFilter]);
 
-  useEffect(() => { load(true); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [search, statusFilter, eventFilter]);
+  useEffect(() => { load(1); }, [search, statusFilter, eventFilter]);
   useEffect(() => {
     fetchParticipantFacets().then(setFacets).catch(() => {});
     fetchEvents().then(setEvents).catch(() => {});
@@ -177,7 +177,7 @@ export function ParticipantsPage() {
           <input
             type="text"
             className="event-search-input"
-            placeholder="Search by name, email, employee ID..."
+            placeholder="Search by name, employee ID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -198,7 +198,7 @@ export function ParticipantsPage() {
 
       {error && <div className="error-card" style={{ marginTop: '1rem' }}>{error}</div>}
 
-      <div className="participant-table" style={{ marginTop: '1rem' }}>
+      <div className="participant-table" style={{ marginTop: '1rem', position: 'relative' }}>
         <div className="event-list-header">
           <div style={{ flex: 2 }}>NAME</div>
           <div style={{ flex: 2 }}>EMAIL</div>
@@ -206,28 +206,72 @@ export function ParticipantsPage() {
           <div style={{ flex: 1 }}>STATUS</div>
           <div style={{ flex: 1, textAlign: 'right' }}>ACTIONS</div>
         </div>
-        {items.length === 0 && !loading ? (
-          <p className="tiny-copy" style={{ padding: '1rem' }}>
-            No participants yet. They appear here automatically once you upload entries.
-          </p>
-        ) : (
-          items.map((p) => (
-            <div key={p.id} className="event-card-row">
-              <div style={{ flex: 2 }}>
-                <strong>{[p.firstName, p.lastName].filter(Boolean).join(' ') || '—'}</strong>
+        <div style={{ maxHeight: '400px', overflowY: 'auto', position: 'relative', paddingBottom: '1rem' }}>
+          {items.length === 0 && !loading ? (
+            <p className="tiny-copy" style={{ padding: '1rem' }}>
+              No participants yet. They appear here automatically once you upload entries.
+            </p>
+          ) : (
+            items.map((p) => (
+              <div key={p.id} className="event-card-row">
+                <div style={{ flex: 2 }}>
+                  <strong>{[p.firstName, p.lastName].filter(Boolean).join(' ') || '—'}</strong>
+                </div>
+                <div style={{ flex: 2 }}>{p.email}</div>
+                <div style={{ flex: 1 }}>{p.employeeId || '—'}</div>
+                <div style={{ flex: 1 }}><StatusPill status={p.status} /></div>
+                <div style={{ flex: 1, textAlign: 'right' }}>
+                  <button type="button" className="btn-ghost-sm" onClick={() => openDetail(p.id)}>Open</button>
+                </div>
               </div>
-              <div style={{ flex: 2 }}>{p.email}</div>
-              <div style={{ flex: 1 }}>{p.employeeId || '—'}</div>
-              <div style={{ flex: 1 }}><StatusPill status={p.status} /></div>
-              <div style={{ flex: 1, textAlign: 'right' }}>
-                <button type="button" className="btn-ghost-sm" onClick={() => openDetail(p.id)}>Open</button>
-              </div>
+            ))
+          )}
+          {loading && (
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(17,18,20,0.8)', color: '#f8fafc', fontWeight: 600, borderRadius: '12px', pointerEvents: 'none' }}>
+              Loading...
             </div>
-          ))
-        )}
-        {loading && <p className="tiny-copy" style={{ padding: '1rem' }}>Loading...</p>}
-        {nextCursor && !loading && (
-          <button type="button" className="btn-ghost" style={{ marginTop: '0.75rem' }} onClick={() => { setCursor(nextCursor); load(false); }}>Load more</button>
+          )}
+        </div>
+        {totalPages > 1 && (
+          <div style={{ position: 'sticky', bottom: 0, zIndex: 10, background: '#0b0b0d', paddingTop: '1rem', paddingBottom: '0.5rem', marginTop: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+              <button type="button" className="btn-ghost-sm" onClick={() => load(currentPage - 1)} disabled={currentPage === 1}>Previous</button>
+              <button type="button" className={currentPage === 1 ? 'btn-primary' : 'btn-ghost-sm'} onClick={() => load(1)} disabled={currentPage === 1}>1</button>
+              {totalPages > 2 && currentPage > 4 && (
+                <span className="tiny-copy" style={{ padding: '0.5rem 0.75rem' }}>…</span>
+              )}
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter((page) => {
+                  if (totalPages <= 9) return true;
+                  if (page <= 2 || page > totalPages - 2) return true;
+                  return Math.abs(page - currentPage) <= 1;
+                })
+                .map((page) => {
+                  if (page === 1 || page === totalPages) return null;
+                  return (
+                    <button
+                      key={page}
+                      type="button"
+                      className={page === currentPage ? 'btn-primary' : 'btn-ghost-sm'}
+                      onClick={() => load(page)}
+                      disabled={page === currentPage}
+                    >
+                      {page}
+                    </button>
+                  );
+                })}
+              {totalPages > 4 && currentPage < totalPages - 3 && (
+                <span className="tiny-copy" style={{ padding: '0.5rem 0.75rem' }}>…</span>
+              )}
+              {totalPages > 1 && (
+                <button type="button" className={currentPage === totalPages ? 'btn-primary' : 'btn-ghost-sm'} onClick={() => load(totalPages)} disabled={currentPage === totalPages}>{totalPages}</button>
+              )}
+              <button type="button" className="btn-ghost-sm" onClick={() => load(currentPage + 1)} disabled={currentPage === totalPages}>Next</button>
+            </div>
+            <div className="tiny-copy">
+              Page {currentPage} of {totalPages}
+            </div>
+          </div>
         )}
       </div>
 

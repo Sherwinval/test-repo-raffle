@@ -94,7 +94,9 @@ export const EntryUpload = ({
   useEffect(() => {
     if (!enableUploadLogic) return;
     if (!uploadId) return;
-    const intervalId = window.setInterval(async () => {
+
+    let intervalId;
+    const fetchProgress = async () => {
       try {
         const data = await fetchUploadProgress(uploadId);
         setProgress(data);
@@ -142,7 +144,10 @@ export const EntryUpload = ({
           return next;
         });
       }
-    }, 1000);
+    };
+
+    fetchProgress();
+    intervalId = window.setInterval(fetchProgress, 1000);
     return () => window.clearInterval(intervalId);
   }, [enableUploadLogic, progressPollKey, uploadId, selectedEvent]);
 
@@ -227,11 +232,16 @@ export const EntryUpload = ({
         return;
       }
       const nextUploadId = result.payload.uploadId;
+      const nextProgress = {
+        ...(progress ?? { status: 'uploading', total: 0, processed: 0, inserted: 0 }),
+        status: 'parsing'
+      };
+      setProgress(nextProgress);
       setUploadId(nextUploadId);
       saveUploadProgressSnapshot({
         eventId: selectedEvent.id,
         uploadId: nextUploadId,
-        progress: progress ?? { status: 'uploading', total: 0, processed: 0, inserted: 0 }
+        progress: nextProgress
       });
     } catch (err) {
       if (err.name === 'AbortError') {
@@ -392,7 +402,12 @@ export const EntryUpload = ({
           )}
 
           <div className="status-stack">
-            {error && <div className="error-card">{error}</div>}
+            {error && (
+              <div className="error-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+                <span>{error}</span>
+                <button type="button" className="btn-ghost-sm" onClick={() => setError(null)}>Dismiss</button>
+              </div>
+            )}
             {progress && <UploadProgress progress={progress} displayProgress={displayProgress} />}
             {progress?.status === 'done' && <UploadSummary progress={progress} />}
           </div>

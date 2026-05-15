@@ -4,23 +4,6 @@ const STATUSES = new Set(['ACTIVE', 'INACTIVE', 'EXCLUDED']);
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 
-function parseCursor(cursor) {
-  if (!cursor) return null;
-  try {
-    const decoded = Buffer.from(cursor, 'base64').toString('utf8');
-    const [createdAtIso, id] = decoded.split('|');
-    if (!createdAtIso || !id) return null;
-    return { createdAt: new Date(createdAtIso), id };
-  } catch {
-    return null;
-  }
-}
-
-function buildCursor(record) {
-  if (!record) return null;
-  return Buffer.from(`${record.createdAt.toISOString()}|${record.id}`).toString('base64');
-}
-
 export async function getParticipantStats(_req, res) {
   try {
     const count = await prisma.participant.count();
@@ -55,7 +38,8 @@ export async function listParticipants(req, res) {
   const status = String(req.query.status || '').trim();
   const eventId = String(req.query.eventId || '').trim();
   const limit = Math.min(MAX_LIMIT, Math.max(1, parseInt(req.query.limit) || DEFAULT_LIMIT));
-  const cursor = parseCursor(req.query.cursor);
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const offset = (page - 1) * limit;
 
   try {
     const where = {
@@ -63,35 +47,30 @@ export async function listParticipants(req, res) {
       ...(eventId ? { entries: { some: { eventId } } } : {}),
       ...(search ? {
         OR: [
-          { email: { contains: search, mode: 'insensitive' } },
           { employeeId: { contains: search, mode: 'insensitive' } },
           { firstName: { contains: search, mode: 'insensitive' } },
           { lastName: { contains: search, mode: 'insensitive' } }
         ]
-      } : {}),
-      ...(cursor ? {
-        OR: [
-          { createdAt: { lt: cursor.createdAt } },
-          { AND: [{ createdAt: cursor.createdAt }, { id: { lt: cursor.id } }] }
-        ]
       } : {})
     };
 
-    const items = await prisma.participant.findMany({
-      where,
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: limit + 1,
-      select: {
-        id: true, employeeId: true, email: true, firstName: true, lastName: true,
-        role: true, site: true, status: true, tags: true, createdAt: true, updatedAt: true
-      }
-    });
+    const [total, items] = await Promise.all([
+      prisma.participant.count({ where }),
+      prisma.participant.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: offset,
+        take: limit,
+        select: {
+          id: true, employeeId: true, email: true, firstName: true, lastName: true,
+          role: true, site: true, status: true, tags: true, createdAt: true, updatedAt: true
+        }
+      })
+    ]);
 
-    const hasMore = items.length > limit;
-    const trimmed = hasMore ? items.slice(0, limit) : items;
-    const nextCursor = hasMore ? buildCursor(trimmed[trimmed.length - 1]) : null;
+    const totalPages = Math.ceil(total / limit);
 
-    res.json({ items: trimmed, nextCursor });
+    res.json({ items, totalPages, currentPage: page });
   } catch (err) {
     console.error('Participants list failed:', err);
     res.status(500).json({ error: 'Failed to fetch participants.' });

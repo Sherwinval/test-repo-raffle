@@ -1,10 +1,10 @@
-export async function fetchParticipants({ search = '', status, eventId, cursor, limit = 50 } = {}) {
+export async function fetchParticipants({ search = '', status, eventId, page = 1, limit = 50 } = {}) {
   const params = new URLSearchParams();
   if (search) params.set('search', search);
   if (status) params.set('status', status);
   if (eventId) params.set('eventId', eventId);
-  if (cursor) params.set('cursor', cursor);
-  if (limit) params.set('limit', String(limit));
+  params.set('page', String(page));
+  params.set('limit', String(limit));
   const res = await fetch(`/api/participants?${params.toString()}`);
   if (!res.ok) throw new Error('Failed to load participants.');
   return res.json();

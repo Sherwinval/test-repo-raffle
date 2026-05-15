@@ -6,13 +6,71 @@ function ActionButton({ label, onClick }) {
   return <button type="button" className="btn-primary action-btn" onClick={onClick}>{label}</button>;
 }
 
-function ActivityRow({ entry }) {
-  const subject = entry.event?.name ? `${entry.event.name} · ${entry.action}` : entry.action;
+function getActivitySubject(entry) {
+  const eventName = entry.event?.name;
+
+  switch (entry.action) {
+    case 'winner_confirmed':
+      return eventName ? `Selected winner on ${eventName}` : 'Selected winner';
+    case 'draw_initiated':
+      return eventName ? `Started draw on ${eventName}` : 'Started draw';
+    case 'manual_entry_added': {
+      const count = entry.count || 1;
+      const plural = count === 1 ? 'entry' : 'entries';
+      return eventName
+        ? `Added ${count} manual ${plural} to ${eventName}`
+        : `Added ${count} manual ${plural}`;
+    }
+    case 'redraw_logged':
+      return eventName ? `Logged redraw on ${eventName}` : 'Logged redraw';
+    case 'winners_reset':
+      return eventName ? `Cleared winners on ${eventName}` : 'Cleared winners';
+    default: {
+      const friendlyAction = entry.action.replace(/_/g, ' ');
+      return eventName ? `${friendlyAction} on ${eventName}` : friendlyAction;
+    }
+  }
+}
+
+function groupRecentActivities(recent) {
+  const grouped = new Map();
+
+  for (const entry of recent) {
+    if (entry.action === 'manual_entry_added' && entry.eventId) {
+      const key = `manual_entry_added:${entry.eventId}`;
+      const existing = grouped.get(key);
+
+      if (existing) {
+        existing.count += 1;
+        if (new Date(entry.createdAt) > new Date(existing.createdAt)) {
+          existing.createdAt = entry.createdAt;
+        }
+      } else {
+        grouped.set(key, { ...entry, count: 1 });
+      }
+    } else {
+      grouped.set(`log:${entry.id}`, entry);
+    }
+  }
+
+  return Array.from(grouped.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+function ActivityCard({ entry }) {
+  const subject = getActivitySubject(entry);
+  const createdAt = new Date(entry.createdAt);
+  const date = createdAt.toLocaleDateString();
+  const time = createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
   return (
-    <li className="overview-activity-row">
-      <span className="overview-activity-action">{subject}</span>
-      <span className="tiny-copy">{new Date(entry.createdAt).toLocaleString()}</span>
-    </li>
+    <div className="overview-activity-card">
+      <div className="overview-activity-action">{subject}</div>
+      <div className="overview-activity-meta">
+        <span>{date}</span>
+        <span className="overview-activity-separator">·</span>
+        <span>{time}</span>
+      </div>
+    </div>
   );
 }
 
@@ -39,7 +97,7 @@ export function OverviewPage({ navigate }) {
 
   const counts = data?.counts || {};
   const myEvents = data?.myEvents || [];
-  const recent = data?.recentActivity || [];
+  const recent = groupRecentActivities(data?.recentActivity || []);
 
   return (
     <PageShell
@@ -83,11 +141,11 @@ export function OverviewPage({ navigate }) {
           {recent.length === 0 ? (
             <p className="tiny-copy">No activity yet.</p>
           ) : (
-            <ul className="overview-activity-list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            <div className="overview-activity-list">
               {recent.map((entry) => (
-                <ActivityRow key={entry.id} entry={entry} />
+                <ActivityCard key={entry.id} entry={entry} />
               ))}
-            </ul>
+            </div>
           )}
         </div>
 
@@ -99,14 +157,17 @@ export function OverviewPage({ navigate }) {
               <button type="button" className="btn-primary action-btn" style={{ marginTop: '0.75rem' }} onClick={() => navigate('/events')}>Create your first event</button>
             </div>
           ) : (
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            <div className="overview-events-list">
               {myEvents.map((ev) => (
-                <li key={ev.id} className="overview-activity-row">
-                  <a href={`#/events/${ev.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>{ev.name}</a>
-                  <span className="tiny-copy">{ev.entryCount} entries · {ev.winnerCount} winners</span>
-                </li>
+                <div key={ev.id} className="overview-event-card">
+                  <a href={`#/events/${ev.id}`} className="overview-event-name">{ev.name}</a>
+                  <div className="overview-event-meta">
+                    <span>{ev.entryCount} entries</span>
+                    <span>{ev.winnerCount} winners</span>
+                  </div>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </div>
       </section>

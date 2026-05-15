@@ -141,11 +141,11 @@ function AppShell({ path, segments, navigate, role, user }) {
   );
 }
 
-function resolveRoute(path, segments) {
+function resolveRoute(path, segments, params) {
   if (segments.length === 0 || segments[0] === 'overview') return { name: 'overview' };
   if (segments[0] === 'events') {
     if (segments.length === 1) return { name: 'events-list' };
-    return { name: 'event-dashboard', eventId: segments[1] };
+    return { name: 'event-dashboard', eventId: segments[1], params };
   }
   if (segments[0] === 'participants') return { name: 'participants', participantId: segments[1] };
   if (segments[0] === 'draws') return { name: 'draws', drawId: segments[1] };
@@ -162,7 +162,7 @@ function renderRoute(route, navigate, role) {
     case 'events-list':
       return <EventsListPage navigate={navigate} />;
     case 'event-dashboard':
-      return <EventDashboardPage eventId={route.eventId} navigate={navigate} />;
+      return <EventDashboardPage eventId={route.eventId} navigate={navigate} params={route.params} />;
     case 'participants':
       return <ParticipantsPage navigate={navigate} participantId={route.participantId} />;
     case 'draws':

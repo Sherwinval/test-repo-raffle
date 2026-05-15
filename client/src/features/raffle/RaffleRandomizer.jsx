@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, forwardRef } from 'react';
 import { SlotMachine } from './SlotMachine';
 import { drawWinner, mapEntryIds } from './raffle.logic';
 import { addWinnerForEvent, clearWinnersForEvent, fetchAllEventEntries, getWinnersForEvent, confirmWinnerOnServer } from './raffle.service';
@@ -28,7 +28,7 @@ const IconMinimize = () => (
   </svg>
 );
 
-export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, onSpinStateChange, onAuditChange }) => {
+export const RaffleRandomizer = forwardRef(({ selectedEvent, uploadState, onStatsChange, onSpinStateChange, onAuditChange }, ref) => {
   const [entries, setEntries] = useState([]);
   const [winners, setWinners] = useState([]);
   const [error, setError] = useState('');
@@ -169,6 +169,17 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
       document.exitFullscreen();
     }
   };
+
+  const enterFullScreen = () => {
+    if (!containerRef.current || document.fullscreenElement) return;
+    containerRef.current.requestFullscreen().catch((err) => {
+      console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+    });
+  };
+
+  useImperativeHandle(ref, () => ({
+    enterFullScreen
+  }), []);
 
   useEffect(() => {
     const handleFsChange = () => {
@@ -355,4 +366,6 @@ export const RaffleRandomizer = ({ selectedEvent, uploadState, onStatsChange, on
       )}
     </div>
   );
-};
+});
+
+RaffleRandomizer.displayName = 'RaffleRandomizer';

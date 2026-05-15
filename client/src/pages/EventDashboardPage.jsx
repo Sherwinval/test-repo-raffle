@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TabNavigator } from '@/components/TabNavigator';
 import { EntryUpload } from '@/features/entry-upload/EntryUpload';
 import { RaffleRandomizer } from '@/features/raffle/RaffleRandomizer';
@@ -20,6 +20,7 @@ export function EventDashboardPage({ eventId, navigate }) {
   const [raffleStats, setRaffleStats] = useState({ total: 0, eligible: 0, drawn: 0 });
   const [isDrawSpinning, setIsDrawSpinning] = useState(false);
   const [auditRefreshKey, setAuditRefreshKey] = useState(0);
+  const raffleRandomizerRef = useRef(null);
 
   useEffect(() => {
     if (!eventId) return;
@@ -118,6 +119,20 @@ export function EventDashboardPage({ eventId, navigate }) {
         />
 
         <section hidden={activeEventTab !== 'entries'}>
+          {uploadStats.entryCount >= 2 && (
+            <div style={{ marginBottom: '1rem' }}>
+              <button
+                type="button"
+                className="btn-primary action-btn"
+                onClick={() => {
+                  setActiveEventTab('raffle');
+                  setTimeout(() => raffleRandomizerRef.current?.enterFullScreen(), 100);
+                }}
+              >
+                Run Raffle (Fullscreen)
+              </button>
+            </div>
+          )}
           <EntryUpload
             selectedEvent={selectedEvent}
             onSelectEvent={setSelectedEvent}
@@ -134,6 +149,7 @@ export function EventDashboardPage({ eventId, navigate }) {
 
         <section hidden={activeEventTab !== 'raffle'}>
           <RaffleRandomizer
+            ref={raffleRandomizerRef}
             selectedEvent={selectedEvent}
             uploadState={uploadState}
             onStatsChange={setRaffleStats}
