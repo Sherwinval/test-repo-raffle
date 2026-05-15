@@ -3792,7 +3792,8 @@ body,
 .brand-block {
   display: flex;
   align-items: center;
-  gap: 0;
+  justify-content: space-between;
+  gap: 8px;
   min-height: 40px;
   position: relative;
   /* overflow must NOT be hidden – it clips the collapse button when collapsed */
@@ -3800,14 +3801,14 @@ body,
 
 /* Expanded RAFDOM name: visible when NOT collapsed */
 .brand-logo-wrap {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition: opacity 0.28s ease, transform 0.28s ease;
 }
 
 .dashboard-shell.collapsed .brand-logo-wrap {
   opacity: 0;
-  transform: translateX(-6px);
+  transform: translateX(-8px) scale(0.92);
   pointer-events: none;
   position: absolute;
 }
@@ -3824,9 +3825,9 @@ body,
   margin: 0;
   padding: 0;
   flex-shrink: 0;
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition: opacity 0.28s ease, transform 0.28s ease;
   opacity: 0;
-  transform: scale(0.7);
+  transform: translateX(8px) scale(0.78);
   pointer-events: none;
   position: absolute;
   left: 0;
@@ -3834,9 +3835,10 @@ body,
 
 .dashboard-shell.collapsed .brand-logo-icon-text {
   opacity: 1;
-  transform: scale(1);
+  transform: translateX(0) scale(1);
   pointer-events: auto;
   position: static;
+  translate: none;
 }
 
 /* Collapse toggle button: always on the right */
@@ -3862,11 +3864,19 @@ body,
 
 /* When collapsed, center the collapse button */
 .dashboard-shell.collapsed .brand-block {
+  flex-direction: column;
   justify-content: center;
+  gap: 6px;
+  min-height: 68px;
 }
 
 .dashboard-shell.collapsed .sidebar-collapse-btn {
+  position: static;
+  transform: none;
   margin-left: 0;
+  width: 24px;
+  height: 24px;
+  padding: 3px;
 }
 
 /* Hide text labels when collapsed */
@@ -3888,15 +3898,52 @@ body,
   pointer-events: none;
 }
 
+.dashboard-shell.collapsed .sidebar-label {
+  height: 0;
+  line-height: 0;
+  margin: 0 !important;
+}
+
 .dashboard-shell.collapsed .sidebar-link {
   justify-content: center;
+  width: 42px;
+  height: 42px;
+  gap: 0;
   padding: 0.65rem;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .dashboard-shell.collapsed .sidebar-nav {
   align-items: center;
 }
 
+.dashboard-shell.collapsed .sidebar-footer {
+  width: 100%;
+}
+
 .dashboard-shell.collapsed .sidebar-user {
   justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.dashboard-shell.collapsed .sidebar-link svg {
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.dashboard-shell.collapsed .sidebar-user-avatar {
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+}
+
+@media (max-width: 980px) {
+  .dashboard-shell.collapsed {
+    grid-template-columns: 1fr;
+  }
 }
