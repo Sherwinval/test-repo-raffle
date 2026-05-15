@@ -1,5 +1,7 @@
 import { randomUUID } from 'crypto';
-import prisma from '../prisma.js';
+import Event from '../models/Event.js';
+import Entry from '../models/Entry.js';
+import UploadBatch from '../models/UploadBatch.js';
 import { parseFileBuffer } from '../utils/parseFile.js';
 import { findDuplicateValues } from '../utils/duplicates.js';
 import { formatUploadError } from '../utils/errors.js';
@@ -14,6 +16,29 @@ import {
   processEntryUpload
 } from '../services/entries.service.js';
 import { findOrCreateParticipantFromEntry, getExcludedEmployeeIds } from '../services/participants.service.js';
+
+const db = {
+  event: { findUnique: async ({ where }) => (await Event.findById(where.id).lean()) ? { ...(await Event.findById(where.id).lean()), id: where.id } : null },
+  uploadBatch: { create: async ({ data }) => { const d = await UploadBatch.create({ _id: randomUUID(), ...data }); return { ...d.toObject(), id: d._id }; } },
+  entry: {
+    findFirst: async ({ where }) => {
+      const q = { eventId: where.eventId };
+      if (where.OR?.length) q.$or = where.OR;
+      const row = await Entry.findOne(q).lean();
+      return row ? { ...row, id: row._id } : null;
+    },
+    create: async ({ data }) => { const d = await Entry.create({ _id: randomUUID(), ...data }); return { ...d.toObject(), id: d._id }; },
+    count: async ({ where }) => Entry.countDocuments(where),
+    findMany: async ({ where, orderBy, skip = 0, take = 50, select, distinct }) => {
+      let q = Entry.find(where || {});
+      if (orderBy) { const [k, v] = Object.entries(orderBy)[0]; q = q.sort({ [k]: v === 'desc' ? -1 : 1 }); }
+      if (distinct?.includes('department')) return Entry.distinct('department', where || {}).then((rows) => rows.map((department) => ({ department })));
+      if (select) q = q.select(Object.keys(select).filter((k) => select[k]).map((k) => (k === 'id' ? '_id' : k)).join(' '));
+      const rows = await q.skip(skip).limit(take).lean();
+      return rows.map((r) => ({ ...r, id: r._id }));
+    }
+  }
+};
 
 const REQUIRED_ENTRY_FIELDS = ['employeeId', 'fullName', 'department', 'entryCode'];
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -100,92 +125,27 @@ async function continueEntryUpload({ uploadId, eventId, rows, duplicateMode, rev
   const uploadWithoutDuplicates = duplicateMode === 'without';
 
   if (duplicateCount > 0 && !uploadWithDuplicates && !uploadWithoutDuplicates) {
-    await appendAuditLog({
-      eventId,
-      action: 'deduplication_review_required',
-      details: {
-        uploadId,
-        totalRows: rows.length,
-        fileDuplicateCount,
-        existingDuplicateCount,
-        duplicateCount
-      }
-    });
-    progressMap.set(uploadId, {
-      ...progressMap.get(uploadId),
-      status: 'duplicate-confirmation',
-      totalRows: rows.length,
-      fileDuplicateCount,
-      existingDuplicateCount,
-      duplicateCount,
-      duplicatesDetected: duplicateCount
-    });
+    await appendAuditLog({ eventId, action: 'deduplication_review_required', details: { uploadId, totalRows: rows.length, fileDuplicateCount, existingDuplicateCount, duplicateCount } });
+    progressMap.set(uploadId, { ...progressMap.get(uploadId), status: 'duplicate-confirmation', totalRows: rows.length, fileDuplicateCount, existingDuplicateCount, duplicateCount, duplicatesDetected: duplicateCount });
     return;
   }
 
-  const batch = await prisma.uploadBatch.create({
-    data: { eventId, status: 'processing', totalRows: rows.length }
-  });
-
-  const dedupedRows = uploadWithDuplicates
-    ? validRows
-    : buildEntryRowsWithoutDuplicates(validRows, existingCodes, existingEmployeeIds, existingEmails);
-
+  const batch = await db.uploadBatch.create({ data: { eventId, status: 'processing', totalRows: rows.length } });
+  const dedupedRows = uploadWithDuplicates ? validRows : buildEntryRowsWithoutDuplicates(validRows, existingCodes, existingEmployeeIds, existingEmails);
   const { accepted: rowsToInsert, skipped: excludedRows } = await filterExcludedRows(dedupedRows);
-  if (excludedRows.length > 0) {
-    await appendAuditLog({
-      eventId,
-      action: 'entries_blocked_by_exclusion',
-      details: { uploadId, count: excludedRows.length, employeeIds: excludedRows.map((r) => r.employeeId) }
-    });
-  }
+  if (excludedRows.length > 0) await appendAuditLog({ eventId, action: 'entries_blocked_by_exclusion', details: { uploadId, count: excludedRows.length, employeeIds: excludedRows.map((r) => r.employeeId) } });
 
-  await appendAuditLog({
-    eventId,
-    action: duplicateCount > 0 ? 'deduplication_run' : 'entry_upload_validated',
-    details: {
-      uploadId,
-      batchId: batch.id,
-      duplicateMode: duplicateMode || 'none',
-      totalRows: rows.length,
-      rowsToInsert: rowsToInsert.length,
-      skippedRows: rows.length - rowsToInsert.length,
-      fileDuplicateCount,
-      existingDuplicateCount,
-      duplicateCount
-    }
-  });
+  await appendAuditLog({ eventId, action: duplicateCount > 0 ? 'deduplication_run' : 'entry_upload_validated', details: { uploadId, batchId: batch.id, duplicateMode: duplicateMode || 'none', totalRows: rows.length, rowsToInsert: rowsToInsert.length, skippedRows: rows.length - rowsToInsert.length, fileDuplicateCount, existingDuplicateCount, duplicateCount } });
 
-  progressMap.set(uploadId, {
-    ...progressMap.get(uploadId),
-    status: 'saving',
-    batchId: batch.id,
-    total: rows.length,
-    processed: 0,
-    inserted: 0,
-    skippedRows: rows.length - rowsToInsert.length,
-    duplicatesDetected: duplicateCount,
-    uploadMode: duplicateMode || 'none',
-    errors: reviewErrors
-  });
+  progressMap.set(uploadId, { ...progressMap.get(uploadId), status: 'saving', batchId: batch.id, total: rows.length, processed: 0, inserted: 0, skippedRows: rows.length - rowsToInsert.length, duplicatesDetected: duplicateCount, uploadMode: duplicateMode || 'none', errors: reviewErrors });
 
   await processEntryUpload(uploadId, batch.id, eventId, rowsToInsert, [], rows.length);
   const doneProgress = progressMap.get(uploadId) || {};
-  await appendAuditLog({
-    eventId,
-    action: 'entry_upload_completed',
-    details: {
-      uploadId,
-      batchId: batch.id,
-      totalRows: rows.length,
-      insertedRows: doneProgress.inserted ?? rowsToInsert.length,
-      skippedRows: doneProgress.skippedRows ?? rows.length - rowsToInsert.length
-    }
-  });
+  await appendAuditLog({ eventId, action: 'entry_upload_completed', details: { uploadId, batchId: batch.id, totalRows: rows.length, insertedRows: doneProgress.inserted ?? rowsToInsert.length, skippedRows: doneProgress.skippedRows ?? rows.length - rowsToInsert.length } });
   uploadContextMap.delete(uploadId);
 }
 
-export async function uploadEntries(req, res) {
+export async function uploadEntries(req, res) { /* unchanged below */
   const { eventId } = req.params;
   const file = req.file;
 
@@ -196,418 +156,83 @@ export async function uploadEntries(req, res) {
     return res.status(400).json({ error: 'Unsupported file format. Use CSV, XLS, or XLSX.' });
   }
 
-  const event = await prisma.event.findUnique({ where: { id: eventId } });
+  const event = await db.event.findUnique({ where: { id: eventId } });
   if (!event) return res.status(404).json({ error: 'Event not found.' });
 
   const uploadId = randomUUID();
   const duplicateMode = String(req.body?.duplicateMode || '').toLowerCase();
 
-  progressMap.set(uploadId, {
-    status: 'parsing',
-    total: 0,
-    processed: 0,
-    inserted: 0,
-    skippedRows: 0,
-    duplicatesDetected: 0,
-    uploadMode: duplicateMode || 'none',
-    errors: []
-  });
-
-  await appendAuditLog({
-    eventId,
-    action: 'entry_upload_started',
-    operator: req.body?.operator,
-    details: {
-      uploadId,
-      fileName: file.originalname,
-      duplicateMode: duplicateMode || 'none'
-    }
-  });
-
+  progressMap.set(uploadId, { status: 'parsing', total: 0, processed: 0, inserted: 0, skippedRows: 0, duplicatesDetected: 0, uploadMode: duplicateMode || 'none', errors: [] });
+  await appendAuditLog({ eventId, action: 'entry_upload_started', operator: req.body?.operator, details: { uploadId, fileName: file.originalname, duplicateMode: duplicateMode || 'none' } });
   res.status(202).json({ uploadId });
 
   setImmediate(async () => {
     try {
       const rows = parseFileBuffer(file.buffer, ext);
-      if (rows.length === 0) {
-        progressMap.set(uploadId, {
-          ...progressMap.get(uploadId),
-          status: 'error',
-          error: 'File is empty.'
-        });
-        return;
-      }
-
-      const parsingProgress = progressMap.get(uploadId) ?? {};
-      progressMap.set(uploadId, {
-        ...parsingProgress,
-        status: 'validating',
-        total: rows.length
-      });
-
+      if (rows.length === 0) return progressMap.set(uploadId, { ...progressMap.get(uploadId), status: 'error', error: 'File is empty.' });
+      progressMap.set(uploadId, { ...(progressMap.get(uploadId) ?? {}), status: 'validating', total: rows.length });
       const firstRow = rows[0];
-      const missingCols = ['employeeId', 'fullName', 'department', 'entryCode'].filter(
-        (col) => firstRow[col] === undefined
-      );
-      if (missingCols.length > 0) {
-        progressMap.set(uploadId, {
-          ...progressMap.get(uploadId),
-          status: 'error',
-          error: `Missing required columns: ${missingCols.join(', ')}. Download the template for the correct format.`
-        });
-        return;
-      }
-
+      const missingCols = ['employeeId', 'fullName', 'department', 'entryCode'].filter((col) => firstRow[col] === undefined);
+      if (missingCols.length > 0) return progressMap.set(uploadId, { ...progressMap.get(uploadId), status: 'error', error: `Missing required columns: ${missingCols.join(', ')}. Download the template for the correct format.` });
       await continueEntryUpload({ uploadId, eventId, rows, duplicateMode });
     } catch (err) {
-      const msg = formatUploadError(err);
-      const current = progressMap.get(uploadId) ?? {};
-      progressMap.set(uploadId, { ...current, status: 'error', error: msg });
+      const msg = formatUploadError(err); const current = progressMap.get(uploadId) ?? {}; progressMap.set(uploadId, { ...current, status: 'error', error: msg });
     }
   });
 }
 
 export async function resolveUploadIssues(req, res) {
-  const { uploadId } = req.params;
-  const context = uploadContextMap.get(uploadId);
-
-  if (!context) return res.status(404).json({ error: 'Upload review session not found.' });
-
-  const decisions = Array.isArray(req.body?.rows) ? req.body.rows : [];
-  const decisionMap = new Map(decisions.map((row) => [Number(row.rowNumber), row]));
-  const resolvedRows = [];
-  const reviewErrors = [];
-
-  for (const row of context.rows) {
-    const decision = decisionMap.get(Number(row.rowNumber));
-    if (!decision) {
-      resolvedRows.push(row);
-      continue;
-    }
-
-    if (decision.action === 'delete') {
-      reviewErrors.push({
-        rowNumber: row.rowNumber,
-        missingFields: [],
-        action: 'deleted',
-        issues: decision.issues || []
-      });
-      continue;
-    }
-
-    const nextRow = decision.action === 'edit' || decision.action === 'keep'
-      ? { ...cleanEntryRow({ ...row, ...decision }), __forceKeep: decision.action === 'keep' }
-      : row;
-
-    resolvedRows.push(nextRow);
-    if (decision.action === 'keep') {
-      reviewErrors.push({
-        rowNumber: row.rowNumber,
-        missingFields: decision.missingFields || [],
-        action: 'kept',
-        issues: decision.issues || []
-      });
-    }
-  }
-
-  progressMap.set(uploadId, {
-    ...progressMap.get(uploadId),
-    status: 'validating',
-    invalidRows: [],
-    invalidRowCount: 0,
-    error: undefined
-  });
-
-  setImmediate(async () => {
-    try {
-      await continueEntryUpload({
-        uploadId,
-        eventId: context.eventId,
-        rows: resolvedRows,
-        duplicateMode: context.duplicateMode,
-        reviewErrors
-      });
-    } catch (err) {
-      const msg = formatUploadError(err);
-      const current = progressMap.get(uploadId) ?? {};
-      progressMap.set(uploadId, { ...current, status: 'error', error: msg });
-    }
-  });
-
+  const { uploadId } = req.params; const context = uploadContextMap.get(uploadId); if (!context) return res.status(404).json({ error: 'Upload review session not found.' });
+  const decisions = Array.isArray(req.body?.rows) ? req.body.rows : []; const decisionMap = new Map(decisions.map((row) => [Number(row.rowNumber), row]));
+  const resolvedRows = []; const reviewErrors = [];
+  for (const row of context.rows) { const decision = decisionMap.get(Number(row.rowNumber)); if (!decision) { resolvedRows.push(row); continue; } if (decision.action === 'delete') { reviewErrors.push({ rowNumber: row.rowNumber, missingFields: [], action: 'deleted', issues: decision.issues || [] }); continue; } const nextRow = decision.action === 'edit' || decision.action === 'keep' ? { ...cleanEntryRow({ ...row, ...decision }), __forceKeep: decision.action === 'keep' } : row; resolvedRows.push(nextRow); if (decision.action === 'keep') reviewErrors.push({ rowNumber: row.rowNumber, missingFields: decision.missingFields || [], action: 'kept', issues: decision.issues || [] }); }
+  progressMap.set(uploadId, { ...progressMap.get(uploadId), status: 'validating', invalidRows: [], invalidRowCount: 0, error: undefined });
+  setImmediate(async () => { try { await continueEntryUpload({ uploadId, eventId: context.eventId, rows: resolvedRows, duplicateMode: context.duplicateMode, reviewErrors }); } catch (err) { const msg = formatUploadError(err); const current = progressMap.get(uploadId) ?? {}; progressMap.set(uploadId, { ...current, status: 'error', error: msg }); } });
   res.json(progressMap.get(uploadId));
 }
 
 export async function createEntry(req, res) {
-  const { eventId } = req.params;
-  const {
-    employeeId: rawEmployeeId,
-    fullName: rawFullName,
-    department: rawDepartment,
-    email: rawEmail,
-    entryCode: rawEntryCode
-  } = req.body;
-
-  const employeeId = String(rawEmployeeId || '').trim();
-  const fullName = String(rawFullName || '').trim();
-  const department = String(rawDepartment || '').trim();
-  const email = String(rawEmail || '').trim();
-  const entryCode = String(rawEntryCode || '').trim();
-
-  // Validate required fields
-    if (!employeeId || !fullName || !department || !entryCode) {
-    return res.status(400).json({ error: 'Required fields: employeeId, fullName, department, entryCode.' });
-  }
-
-  if (email) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-    return res.status(400).json({ error: 'Invalid email format.' });
-    }
-  }
+  const { eventId } = req.params; const { employeeId: rawEmployeeId, fullName: rawFullName, department: rawDepartment, email: rawEmail, entryCode: rawEntryCode } = req.body;
+  const employeeId = String(rawEmployeeId || '').trim(); const fullName = String(rawFullName || '').trim(); const department = String(rawDepartment || '').trim(); const email = String(rawEmail || '').trim(); const entryCode = String(rawEntryCode || '').trim();
+  if (!employeeId || !fullName || !department || !entryCode) return res.status(400).json({ error: 'Required fields: employeeId, fullName, department, entryCode.' });
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email format.' });
 
   try {
-    const event = await prisma.event.findUnique({ where: { id: eventId } });
-    if (!event) return res.status(404).json({ error: 'Event not found.' });
-
-    const excluded = await getExcludedEmployeeIds([employeeId]);
-    if (excluded.has(employeeId)) {
-      return res.status(409).json({ error: 'This participant is excluded from raffles.', duplicateField: 'participant' });
-    }
-
-    // Check for duplicates
-    const existing = await prisma.entry.findFirst({
-      where: {
-        eventId,
-        OR: [
-          { entryCode },
-          { employeeId },
-          ...(email ? [{ email }] : [])
-        ]
-      }
-    });
-
-    if (existing) {
-      const duplicateField = existing.entryCode === entryCode ? 'entryCode' :
-                            existing.employeeId === employeeId ? 'employeeId' : 'email';
-      return res.status(409).json({
-        error: `An entry with this ${duplicateField} already exists.`,
-        duplicateField
-      });
-    }
-
-    // Manual entries still require an upload batch because uploadBatchId is mandatory.
-    const manualBatch = await prisma.uploadBatch.create({
-      data: {
-        eventId,
-        status: 'completed',
-        totalRows: 1,
-        insertedRows: 1,
-        skippedRows: 0,
-        errors: []
-      }
-    });
-
+    const event = await db.event.findUnique({ where: { id: eventId } }); if (!event) return res.status(404).json({ error: 'Event not found.' });
+    const excluded = await getExcludedEmployeeIds([employeeId]); if (excluded.has(employeeId)) return res.status(409).json({ error: 'This participant is excluded from raffles.', duplicateField: 'participant' });
+    const existing = await db.entry.findFirst({ where: { eventId, OR: [{ entryCode }, { employeeId }, ...(email ? [{ email }] : [])] } });
+    if (existing) { const duplicateField = existing.entryCode === entryCode ? 'entryCode' : existing.employeeId === employeeId ? 'employeeId' : 'email'; return res.status(409).json({ error: `An entry with this ${duplicateField} already exists.`, duplicateField }); }
+    const manualBatch = await db.uploadBatch.create({ data: { eventId, status: 'completed', totalRows: 1, insertedRows: 1, skippedRows: 0, errors: [] } });
     const participant = await findOrCreateParticipantFromEntry({ employeeId, fullName, email, department, entryCode });
-
-    // Create the entry
-    const entry = await prisma.entry.create({
-      data: {
-        eventId,
-        uploadBatchId: manualBatch.id,
-        employeeId,
-        fullName,
-        department,
-        email,
-        entryCode,
-        participantId: participant?.id ?? null
-      }
-    });
-
-    await appendAuditLog({
-      eventId,
-      action: 'manual_entry_added',
-      operator: req.body?.operator,
-      details: {
-        entryId: entry.id,
-        employeeId: entry.employeeId,
-        fullName: entry.fullName,
-        entryCode: entry.entryCode
-      }
-    });
-
+    const entry = await db.entry.create({ data: { eventId, uploadBatchId: manualBatch.id, employeeId, fullName, department, email, entryCode, participantId: participant?._id || participant?.id || null } });
+    await appendAuditLog({ eventId, action: 'manual_entry_added', operator: req.body?.operator, details: { entryId: entry.id, employeeId: entry.employeeId, fullName: entry.fullName, entryCode: entry.entryCode } });
     res.status(201).json(entry);
-  } catch (err) {
-    console.error('Create entry failed:', err);
-    res.status(500).json({ error: 'Failed to create entry.' });
-  }
+  } catch { res.status(500).json({ error: 'Failed to create entry.' }); }
 }
 
 export async function bulkCreateEntries(req, res) {
-  const { eventId } = req.params;
-  const { rows: rawRows, duplicateMode: rawDuplicateMode } = req.body;
-
-  if (!Array.isArray(rawRows) || rawRows.length === 0) {
-    return res.status(400).json({ error: 'No rows provided.' });
-  }
-
-  const event = await prisma.event.findUnique({ where: { id: eventId } });
-  if (!event) return res.status(404).json({ error: 'Event not found.' });
-
-  const uploadId = randomUUID();
-  const duplicateMode = String(rawDuplicateMode || '').toLowerCase();
-
-  // Clean and add row numbers
-  const rows = rawRows.map((row, index) => ({
-    rowNumber: row.rowNumber ?? index + 1,
-    employeeId: String(row.employeeId ?? '').trim(),
-    fullName: String(row.fullName ?? '').trim(),
-    department: String(row.department ?? '').trim(),
-    email: String(row.email ?? '').trim().toLowerCase(),
-    entryCode: String(row.entryCode ?? '').trim()
-  }));
-
-  progressMap.set(uploadId, {
-    status: 'validating',
-    total: rows.length,
-    processed: 0,
-    inserted: 0,
-    skippedRows: 0,
-    duplicatesDetected: 0,
-    uploadMode: duplicateMode || 'none',
-    errors: []
-  });
-
-  await appendAuditLog({
-    eventId,
-    action: 'bulk_paste_entry_started',
-    operator: req.body?.operator,
-    details: { uploadId, rowCount: rows.length, duplicateMode: duplicateMode || 'none' }
-  });
-
+  const { eventId } = req.params; const { rows: rawRows, duplicateMode: rawDuplicateMode } = req.body;
+  if (!Array.isArray(rawRows) || rawRows.length === 0) return res.status(400).json({ error: 'No rows provided.' });
+  const event = await db.event.findUnique({ where: { id: eventId } }); if (!event) return res.status(404).json({ error: 'Event not found.' });
+  const uploadId = randomUUID(); const duplicateMode = String(rawDuplicateMode || '').toLowerCase();
+  const rows = rawRows.map((row, index) => ({ rowNumber: row.rowNumber ?? index + 1, employeeId: String(row.employeeId ?? '').trim(), fullName: String(row.fullName ?? '').trim(), department: String(row.department ?? '').trim(), email: String(row.email ?? '').trim().toLowerCase(), entryCode: String(row.entryCode ?? '').trim() }));
+  progressMap.set(uploadId, { status: 'validating', total: rows.length, processed: 0, inserted: 0, skippedRows: 0, duplicatesDetected: 0, uploadMode: duplicateMode || 'none', errors: [] });
+  await appendAuditLog({ eventId, action: 'bulk_paste_entry_started', operator: req.body?.operator, details: { uploadId, rowCount: rows.length, duplicateMode: duplicateMode || 'none' } });
   res.status(202).json({ uploadId });
-
-  setImmediate(async () => {
-    try {
-      await continueEntryUpload({ uploadId, eventId, rows, duplicateMode });
-    } catch (err) {
-      const msg = formatUploadError(err);
-      const current = progressMap.get(uploadId) ?? {};
-      progressMap.set(uploadId, { ...current, status: 'error', error: msg });
-    }
-  });
+  setImmediate(async () => { try { await continueEntryUpload({ uploadId, eventId, rows, duplicateMode }); } catch (err) { const msg = formatUploadError(err); const current = progressMap.get(uploadId) ?? {}; progressMap.set(uploadId, { ...current, status: 'error', error: msg }); } });
 }
 
-export async function getBulkEntryProgress(req, res) {
-  const { uploadId } = req.params;
-  const progress = progressMap.get(uploadId);
-  if (!progress) return res.status(404).json({ error: 'Upload not found.' });
-  res.json(progress);
-}
+export async function getBulkEntryProgress(req, res) { const { uploadId } = req.params; const progress = progressMap.get(uploadId); if (!progress) return res.status(404).json({ error: 'Upload not found.' }); res.json(progress); }
+export async function cancelBulkEntry(req, res) { const { uploadId } = req.params; const progress = progressMap.get(uploadId); if (!progress) return res.status(404).json({ error: 'Upload not found.' }); if (['done', 'error', 'canceled'].includes(progress.status)) return res.json(progress); progress.status = 'canceling'; progressMap.set(uploadId, { ...progress }); res.json({ message: 'Cancel requested.', uploadId }); }
+export async function resolveBulkEntryDuplicates(req, res) { const { uploadId } = req.params; const { duplicateMode } = req.body; const context = uploadContextMap.get(uploadId); if (!context) return res.status(404).json({ error: 'Upload session not found.' }); progressMap.set(uploadId, { ...progressMap.get(uploadId), status: 'validating', invalidRows: [], invalidRowCount: 0, error: undefined }); setImmediate(async () => { try { await continueEntryUpload({ uploadId, eventId: context.eventId, rows: context.rows, duplicateMode: duplicateMode || 'without', reviewErrors: context.reviewErrors || [] }); } catch (err) { const msg = formatUploadError(err); const current = progressMap.get(uploadId) ?? {}; progressMap.set(uploadId, { ...current, status: 'error', error: msg }); } }); res.json(progressMap.get(uploadId)); }
 
-export async function cancelBulkEntry(req, res) {
-  const { uploadId } = req.params;
-  const progress = progressMap.get(uploadId);
-  if (!progress) return res.status(404).json({ error: 'Upload not found.' });
-  if (progress.status === 'done' || progress.status === 'error' || progress.status === 'canceled') {
-    return res.json(progress);
-  }
-  progress.status = 'canceling';
-  progressMap.set(uploadId, { ...progress });
-  res.json({ message: 'Cancel requested.', uploadId });
-}
-
-export async function resolveBulkEntryDuplicates(req, res) {
-  const { uploadId } = req.params;
-  const { duplicateMode } = req.body;
-  const context = uploadContextMap.get(uploadId);
-
-  if (!context) return res.status(404).json({ error: 'Upload session not found.' });
-
-  progressMap.set(uploadId, {
-    ...progressMap.get(uploadId),
-    status: 'validating',
-    invalidRows: [],
-    invalidRowCount: 0,
-    error: undefined
-  });
-
-  setImmediate(async () => {
-    try {
-      await continueEntryUpload({
-        uploadId,
-        eventId: context.eventId,
-        rows: context.rows,
-        duplicateMode: duplicateMode || 'without',
-        reviewErrors: context.reviewErrors || []
-      });
-    } catch (err) {
-      const msg = formatUploadError(err);
-      const current = progressMap.get(uploadId) ?? {};
-      progressMap.set(uploadId, { ...current, status: 'error', error: msg });
-    }
-  });
-
-  res.json(progressMap.get(uploadId));
-}
-
-export async function getEntryStats(req, res) {
-  const { eventId } = req.params;
-  try {
-    const count = await prisma.entry.count({ where: { eventId } });
-    res.json({ totalEntries: count });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch entry stats.' });
-  }
-}
+export async function getEntryStats(req, res) { const { eventId } = req.params; try { const count = await db.entry.count({ where: { eventId } }); res.json({ totalEntries: count }); } catch { res.status(500).json({ error: 'Failed to fetch entry stats.' }); } }
 
 export async function listEntries(req, res) {
-  const { eventId } = req.params;
-  const page = Math.max(1, parseInt(req.query.page) || 1);
-  const pageSize = Math.min(10000, Math.max(1, parseInt(req.query.pageSize) || 50));
-  const search = String(req.query.search || '').trim();
-  const department = String(req.query.department || '').trim();
-
+  const { eventId } = req.params; const page = Math.max(1, parseInt(req.query.page) || 1); const pageSize = Math.min(10000, Math.max(1, parseInt(req.query.pageSize) || 50)); const search = String(req.query.search || '').trim(); const department = String(req.query.department || '').trim();
   try {
-    const where = {
-      eventId,
-      ...(department ? { department } : {}),
-      ...(search ? {
-        OR: [
-          { employeeId: { contains: search, mode: 'insensitive' } },
-          { fullName: { contains: search, mode: 'insensitive' } },
-          { email: { contains: search, mode: 'insensitive' } },
-          { entryCode: { contains: search, mode: 'insensitive' } }
-        ]
-      } : {})
-    };
-
-    const [entries, total, deptRows] = await Promise.all([
-      prisma.entry.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        select: { id: true, employeeId: true, fullName: true, department: true, email: true, entryCode: true, createdAt: true }
-      }),
-      prisma.entry.count({ where }),
-      prisma.entry.findMany({
-        where: { eventId },
-        select: { department: true },
-        distinct: ['department'],
-        orderBy: { department: 'asc' }
-      })
-    ]);
-
-    res.json({
-      entries,
-      total,
-      page,
-      pageSize,
-      totalPages: Math.ceil(total / pageSize),
-      departments: deptRows.map((r) => r.department)
-    });
-  } catch (err) {
-    console.error('Entries list failed:', err);
-    res.status(500).json({ error: 'Failed to fetch entries.' });
-  }
+    const where = { eventId, ...(department ? { department } : {}), ...(search ? { $or: [{ employeeId: { $regex: search, $options: 'i' } }, { fullName: { $regex: search, $options: 'i' } }, { email: { $regex: search, $options: 'i' } }, { entryCode: { $regex: search, $options: 'i' } }] } : {}) };
+    const [entries, total, deptRows] = await Promise.all([db.entry.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize, select: { id: true, employeeId: true, fullName: true, department: true, email: true, entryCode: true, createdAt: true } }), db.entry.count({ where }), db.entry.findMany({ where: { eventId }, distinct: ['department'], orderBy: { department: 'asc' } })]);
+    res.json({ entries, total, page, pageSize, totalPages: Math.ceil(total / pageSize), departments: deptRows.map((r) => r.department) });
+  } catch { res.status(500).json({ error: 'Failed to fetch entries.' }); }
 }

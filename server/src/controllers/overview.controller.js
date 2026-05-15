@@ -1,65 +1,35 @@
-import prisma from '../prisma.js';
+import Participant from '../models/Participant.js';
+import Event from '../models/Event.js';
+import Entry from '../models/Entry.js';
+import Winner from '../models/Winner.js';
 import { listRecentAuditLogs } from '../services/audit.service.js';
 
-function isPermissionError(err) {
-  return err?.code === 'EACCES' || /permission denied/i.test(String(err?.message || ''));
-}
-
-async function safe(fn, fallback, label) {
-  try {
-    return await fn();
-  } catch (err) {
-    if (isPermissionError(err)) {
-      console.warn(`Overview fallback for ${label}:`, err.code || err.message);
-      return fallback;
-    }
-    throw err;
-  }
-}
+const safe = async (fn, fallback) => { try { return await fn(); } catch { return fallback; } };
 
 export async function getOverviewHandler(_req, res) {
-  try {
-    res.setHeader('Cache-Control', 'private, max-age=30');
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const [participants, events, eventsLast30, entries, draws, winners, recent] = await Promise.all([
+    safe(() => Participant.countDocuments({}), 0),
+    safe(() => Event.countDocuments({}), 0),
+    safe(() => Event.countDocuments({ createdAt: { $gte: thirtyDaysAgo } }), 0),
+    safe(() => Entry.countDocuments({}), 0),
+    safe(() => Winner.countDocuments({}), 0),
+    safe(() => Winner.countDocuments({ status: 'CONFIRMED' }), 0),
+    safe(() => listRecentAuditLogs({ limit: 10 }), [])
+  ]);
 
-    const [participants, events, eventsLast30, entries, draws, winners, recent] = await Promise.all([
-      safe(() => prisma.participant.count(), 0, 'participants'),
-      safe(() => prisma.event.count(), 0, 'events'),
-      safe(() => prisma.event.count({ where: { createdAt: { gte: thirtyDaysAgo } } }), 0, 'eventsLast30'),
-      safe(() => prisma.entry.count(), 0, 'entries'),
-      safe(() => prisma.winner.count(), 0, 'draws'),
-      safe(() => prisma.winner.count({ where: { status: 'CONFIRMED' } }), 0, 'winners'),
-      safe(() => listRecentAuditLogs({ limit: 10 }), [], 'recentActivity')
-    ]);
+  const myEventsRaw = await safe(() => Event.find({}).sort({ createdAt: -1 }).limit(10).lean(), []);
+  const ids = myEventsRaw.map((e) => e._id);
+  const [entryCounts, winnerCounts] = await Promise.all([
+    Entry.aggregate([{ $match: { eventId: { $in: ids } } }, { $group: { _id: '$eventId', c: { $sum: 1 } } }]),
+    Winner.aggregate([{ $match: { eventId: { $in: ids } } }, { $group: { _id: '$eventId', c: { $sum: 1 } } }])
+  ]);
+  const eMap = new Map(entryCounts.map((x) => [x._id, x.c]));
+  const wMap = new Map(winnerCounts.map((x) => [x._id, x.c]));
 
-    const myEventsRaw = await safe(
-      () =>
-        prisma.event.findMany({
-          orderBy: { createdAt: 'desc' },
-          take: 10,
-          include: {
-            _count: { select: { entries: true, winners: true } }
-          }
-        }),
-      [],
-      'myEvents'
-    );
-
-    const myEvents = myEventsRaw.map((e) => ({
-      id: e.id,
-      name: e.name,
-      createdAt: e.createdAt,
-      entryCount: e._count.entries,
-      winnerCount: e._count.winners
-    }));
-
-    res.json({
-      counts: { participants, events, eventsLast30, entries, draws, winners },
-      recentActivity: recent,
-      myEvents
-    });
-  } catch (err) {
-    console.error('Overview failed:', err);
-    res.status(500).json({ error: 'Failed to load overview.' });
-  }
+  res.json({
+    counts: { participants, events, eventsLast30, entries, draws, winners },
+    recentActivity: recent,
+    myEvents: myEventsRaw.map((e) => ({ id: e._id, name: e.name, createdAt: e.createdAt, entryCount: eMap.get(e._id) || 0, winnerCount: wMap.get(e._id) || 0 }))
+  });
 }

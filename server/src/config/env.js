@@ -1,4 +1,4 @@
-const REQUIRED_ENV = ['DATABASE_URL'];
+const REQUIRED_ENV = ['MONGODB_URI'];
 
 export function validateEnv() {
   const missing = REQUIRED_ENV.filter((key) => !process.env[key]);
@@ -6,4 +6,3 @@ export function validateEnv() {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   }
 }
-
